@@ -26,8 +26,8 @@ contract DataControlContract {
     }
 
     struct StorkContract {
-        uint256 maxTxCount;
         uint256 txCount;
+        bool isActive;
     }
 
     uint256 private minStake;
@@ -72,6 +72,7 @@ contract DataControlContract {
     }
 
     function storkNodeTxController(
+        uint256 txId,
         address[] calldata txStorkAddrs,
         uint256[] calldata _txCounts
     ) public onlyMultiSigWallet {
@@ -88,7 +89,7 @@ contract DataControlContract {
     function addStorkContract() public payable {
         require(msg.value > minStake, "Funds must be greater than 0");
 
-        storkContracts[msg.sender] = StorkContract(msg.value / costPerTx, 0);
+        storkContracts[msg.sender] = StorkContract(msg.value / costPerTx, true);
     }
 
     /// @notice Any user can further fund a StorkContract
@@ -98,7 +99,7 @@ contract DataControlContract {
     function fundStorkContractStake(address _storkContractAddr) public payable {
         require(msg.value > minStake, "Funds must be greater than 0");
 
-        storkContracts[_storkContractAddr].maxTxCount += msg.value / costPerTx;
+        storkContracts[_storkContractAddr].txCount += msg.value / costPerTx;
     }
 
     /// @notice Updates the number of data storing Txs that were involved with this StorkContract
@@ -107,11 +108,26 @@ contract DataControlContract {
     /// @param _txContractAddrs contains the list of StorkContract addresses that had any txs involving data change
     ///        on the StorkNet that were sent to them
     function contractTxController(
+        uint256 txId,
         address[] calldata _txContractAddrs,
         uint256[] calldata _txCounts
     ) public onlyMultiSigWallet {
         for (uint256 i = 0; i < _txContractAddrs.length; ++i) {
-            storkContracts[_txContractAddrs[i]].txCount += _txCounts[i];
+            
+            // instead of this emit a fail event
+            if(storkContracts[_txContractAddrs[i]].txCount >  _txCounts[i]){
+                emit ContractOutOfFund(txId, _txContractAddrs[i]);
+            }            
+            storkContracts[_txContractAddrs[i]].txCount -= _txCounts[i];
         }
     }
+
+
+
+    event NewCostPerTx(uint256 indexed _newTxCost);
+    event NewMinStake(uint256 indexed _newMinStake);
+    event NodeStaked(address indexed newNode);
+    event ContractStaked(address indexed newContract);
+    event BatchUpdate(uint256 indexed txId, bool indexed updateStatus);
+    event ContractOutOfFund(uint256 indexed txId, address indexed contractOnLowFund);
 }
