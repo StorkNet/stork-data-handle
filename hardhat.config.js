@@ -7,8 +7,8 @@ module.exports = {
         hardhat: {
             // If you want to do some forking set `enabled` to true
             forking: {
-                url: MAINNET_RPC_URL,
-                blockNumber: FORKING_BLOCK_NUMBER,
+                url: "https://localhost:8545",
+                // blockNumber: FORKING_BLOCK_NUMBER,
                 enabled: false,
             },
             chainId: 31337,
