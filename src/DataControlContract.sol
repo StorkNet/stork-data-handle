@@ -1,17 +1,19 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.10;
 
-/// @title
-/// @author Shankar
-/// @notice Here we have a contract that will be used to control the payments and data transfer requests to the
-///         StorkNet network.
+/// @title StorkNet's OnChain Data Control Contract
+/// @author Shankar "theblushirtdude" Subramanian
+/// @notice 
 /// @dev Explain to a developer any extra details
 contract StorkDataControlContract {
+
+    /// @dev Only validated users can access the function
     modifier OnlyStorkNodes() {
         require(storkNodes[msg.sender].isActive == true, "Not a validator");
         _;
     }
 
+    /// @dev Only the multi sig wallet can access these functions that update batches so that we lower gas fees
     modifier onlyMultiSigWallet() {
         require(msg.sender == multiSigWallet, "Not multi sig wallet");
         _;
@@ -29,8 +31,6 @@ contract StorkDataControlContract {
         uint256 txCount;
     }
 
-    /// @notice Minimum Stake amount used to activate a validator
-    /// @dev
 
     uint256 private minStake;
     uint256 private costPerTx;
