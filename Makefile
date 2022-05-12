@@ -20,7 +20,7 @@ install :; forge install dapphub/ds-test && forge install rari-capital/solmate &
 update:; forge update
 
 # Builds
-build  :; forge clean && forge build --optimize --optimize-runs 1000000
+build  :; forge clean && forge build --optimize --optimizer-runs 1000000
 dappbuild :; dapp build
 
 # chmod scripts
