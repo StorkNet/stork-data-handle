@@ -91,7 +91,7 @@ contract DataControlContract {
     /// @notice A StorkContract is a contract that uses StorkNet to decouple data from the EVM contract
     /// @dev On the creation of a StorkContract funds must be transferred that are used to compute the
     ///      total number of transactions that it can handle
-    function addStorkContract() public payable {
+    function addStorkContract() external payable {
         require(msg.value > minStake, "Funds must be greater than 0");
 
         storkContracts[msg.sender] = StorkContract(msg.value / costPerTx, true);
@@ -131,6 +131,8 @@ contract DataControlContract {
         emit BatchUpdate(txId, txBatchingClean);
     }
 
+    // -----------------------------------------------------------------------------------------------------------------
+
     function changeTxCost(uint256 newCostPerTx) public onlyMultiSigWallet {
         costPerTx = newCostPerTx;
         emit NewCostPerTx(newCostPerTx);
@@ -141,6 +143,10 @@ contract DataControlContract {
         emit NewMinStake(newMinStake);
     } 
 
+
+    fallback() external payable {}
+    receive() external payable {}
+    
     event NewCostPerTx(uint256 indexed newCostPerTx);
     event NewMinStake(uint256 indexed newMinStake);
     event NodeStaked(address indexed newNode, uint256 time);
