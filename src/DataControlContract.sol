@@ -53,6 +53,7 @@ contract DataControlContract {
 
     function addStorkNode() public payable {
         require(msg.value > minStake, "Deposit must be greater than 0");
+        require(msg.sender != address(0), "Can't be null address");
 
         storkNodes[msg.sender] = StorkNode(
             msg.value,
@@ -60,6 +61,8 @@ contract DataControlContract {
             0,
             true
         );
+
+        emit NodeStaked(msg.sender, storkNodes[msg.sender].stakeEndTime);
     }
 
     function fundStorkNodeStake() public payable {
@@ -69,10 +72,12 @@ contract DataControlContract {
         storkNodes[msg.sender].stakeEndTime +=
             block.timestamp +
             (stakeHours * stakeDays);
+
+        emit NodeStakeExtended(msg.sender, storkNodes[msg.sender].stakeEndTime);
     }
 
-    function storkNodeTxController(
-        uint256 txId,
+    function storkNodeTxBatcher(
+        // uint256 txId,
         address[] calldata txStorkAddrs,
         uint256[] calldata _txCounts
     ) public onlyMultiSigWallet {
@@ -86,20 +91,23 @@ contract DataControlContract {
     /// @notice A StorkContract is a contract that uses StorkNet to decouple data from the EVM contract
     /// @dev On the creation of a StorkContract funds must be transferred that are used to compute the
     ///      total number of transactions that it can handle
-    function addStorkContract() public payable {
+    function addStorkContract() external payable {
         require(msg.value > minStake, "Funds must be greater than 0");
 
         storkContracts[msg.sender] = StorkContract(msg.value / costPerTx, true);
+        emit ContractCreated(msg.sender, msg.value / costPerTx);
     }
 
     /// @notice Any user can further fund a StorkContract
     /// @dev Increase the funding of the StorkContract
     /// @param _storkContractAddr a parameter that is used to pass the address of the stork contract
     ///         that is being funded
-    function fundStorkContractStake(address _storkContractAddr) public payable {
+    function fundStorkContract(address _storkContractAddr) public payable {
         require(msg.value > minStake, "Funds must be greater than 0");
-
+        require(msg.sender != address(0), "Can't be null address");
+        
         storkContracts[_storkContractAddr].txCount += msg.value / costPerTx;
+        emit ContractFunded(_storkContractAddr, msg.value / costPerTx, storkContracts[_storkContractAddr].txCount);
     }
 
     /// @notice Updates the number of data storing Txs that were involved with this StorkContract
@@ -107,27 +115,44 @@ contract DataControlContract {
     ///      transaction on the main EVM chain
     /// @param _txContractAddrs contains the list of StorkContract addresses that had any txs involving data change
     ///        on the StorkNet that were sent to them
-    function contractTxController(
+    function contractTxBatcher(
         uint256 txId,
         address[] calldata _txContractAddrs,
         uint256[] calldata _txCounts
     ) public onlyMultiSigWallet {
+        bool txBatchingClean = true;
         for (uint256 i = 0; i < _txContractAddrs.length; ++i) {
-            
-            // instead of this emit a fail event
             if(storkContracts[_txContractAddrs[i]].txCount >  _txCounts[i]){
                 emit ContractOutOfFund(txId, _txContractAddrs[i]);
+                txBatchingClean = false;
             }            
             storkContracts[_txContractAddrs[i]].txCount -= _txCounts[i];
         }
+        emit BatchUpdate(txId, txBatchingClean);
     }
 
+    // -----------------------------------------------------------------------------------------------------------------
+
+    function changeTxCost(uint256 newCostPerTx) public onlyMultiSigWallet {
+        costPerTx = newCostPerTx;
+        emit NewCostPerTx(newCostPerTx);
+    } 
+
+    function changeMinStake(uint256 newMinStake) public onlyMultiSigWallet {
+        minStake = newMinStake;
+        emit NewMinStake(newMinStake);
+    } 
 
 
-    event NewCostPerTx(uint256 indexed _newTxCost);
-    event NewMinStake(uint256 indexed _newMinStake);
-    event NodeStaked(address indexed newNode);
-    event ContractStaked(address indexed newContract);
+    fallback() external payable {}
+    receive() external payable {}
+    
+    event NewCostPerTx(uint256 indexed newCostPerTx);
+    event NewMinStake(uint256 indexed newMinStake);
+    event NodeStaked(address indexed newNode, uint256 time);
+    event NodeStakeExtended(address indexed newNode, uint256 newTime);
+    event ContractCreated(address indexed newContract, uint256 indexed fundValue);
+    event ContractFunded(address indexed oldContract, uint256 indexed fundValue, uint256 newFundTotal);
     event BatchUpdate(uint256 indexed txId, bool indexed updateStatus);
     event ContractOutOfFund(uint256 indexed txId, address indexed contractOnLowFund);
 }
