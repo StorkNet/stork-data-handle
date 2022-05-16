@@ -26,7 +26,8 @@ contract MultiSigVerification {
 
     struct Transaction {
         address contractAddr;
-        bytes data;
+        address[] validators;
+        bool exist;
         bool executed;
         uint256 numConfirmations;
         uint256 maxNumConfirmations;
@@ -36,6 +37,7 @@ contract MultiSigVerification {
     mapping(uint256 => mapping(address => bool)) public isConfirmed;
 
     mapping(uint256 => Transaction) public transactions;
+
     uint256 private txCount;
 
     modifier onlyValidator() {
@@ -44,7 +46,7 @@ contract MultiSigVerification {
     }
 
     modifier txExists(uint256 _txIndex) {
-        require(_txIndex < txCount, "tx does not exist");
+        require(transactions[_txIndex].exist, "tx does not exist");
         _;
     }
 
@@ -85,13 +87,17 @@ contract MultiSigVerification {
     function submitTransaction(
         uint256 _txIndex,
         address _contractAddr,
-        bytes memory _data,
+        address[] calldata _validators,
         uint256 _maxNumConfirmations
     ) public onlyValidator {
+        require(transactions[_txIndex].exist == false, "tx already exists");
+
         txCount++;
+
         transactions[_txIndex] = Transaction({
             contractAddr: _contractAddr,
-            data: _data,
+            validators: _validators,
+            exist: true,
             executed: false,
             numConfirmations: 0,
             maxNumConfirmations: _maxNumConfirmations
@@ -129,11 +135,6 @@ contract MultiSigVerification {
 
         transaction.executed = true;
 
-        // (bool success, ) = transaction.contractAddr.call{value: transaction.value}(
-        //     transaction.data
-        // );
-        // require(success, "tx failed");
-
         emit ExecuteTransaction(msg.sender, _txIndex);
     }
 
@@ -164,22 +165,8 @@ contract MultiSigVerification {
     function getTransaction(uint256 _txIndex)
         public
         view
-        returns (
-            address contractAddr,
-            bytes memory data,
-            bool executed,
-            uint256 numConfirmations,
-            uint256 maxNumConfirmations
-        )
+        returns (Transaction memory)
     {
-        Transaction storage transaction = transactions[_txIndex];
-
-        return (
-            transaction.contractAddr,
-            transaction.data,
-            transaction.executed,
-            transaction.numConfirmations,
-            transaction.maxNumConfirmations
-        );
+        return (transactions[_txIndex]);
     }
 }
