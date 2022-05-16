@@ -3,21 +3,25 @@ pragma solidity ^0.8.10;
 
 contract MultiSigVerification {
     event SubmitTransaction(
-        address indexed validator,
         uint256 indexed txIndex,
+        address indexed validator,
         address indexed contractAddr
     );
     event ConfirmTransaction(
+        uint256 indexed txIndex,
         address indexed validator,
-        uint256 indexed txIndex
+        uint256 indexed validatorCount
     );
     event RevokeConfirmation(
-        address indexed validator,
+        uint256 indexed txIndex,
+        address indexed validator
+    );
+    event InvalidValidators(
         uint256 indexed txIndex
     );
     event ExecuteTransaction(
-        address indexed validator,
-        uint256 indexed txIndex
+        uint256 indexed txIndex,
+        address indexed validator
     );
 
     address[] public validators;
@@ -26,8 +30,9 @@ contract MultiSigVerification {
 
     struct Transaction {
         address contractAddr;
+        bytes32 validatorCheck;
         address[] validators;
-        bool exist;
+        bool created;
         bool executed;
         uint256 numConfirmations;
         uint256 maxNumConfirmations;
@@ -46,7 +51,7 @@ contract MultiSigVerification {
     }
 
     modifier txExists(uint256 _txIndex) {
-        require(transactions[_txIndex].exist, "tx does not exist");
+        require(transactions[_txIndex].created, "tx does not exist");
         _;
     }
 
@@ -87,23 +92,24 @@ contract MultiSigVerification {
     function submitTransaction(
         uint256 _txIndex,
         address _contractAddr,
-        address[] calldata _validators,
+        bytes32 _validatorCheck,
         uint256 _maxNumConfirmations
     ) public onlyValidator {
-        require(transactions[_txIndex].exist == false, "tx already exists");
+        require(transactions[_txIndex].created == false, "tx already exists");
 
         txCount++;
 
         transactions[_txIndex] = Transaction({
             contractAddr: _contractAddr,
-            validators: _validators,
-            exist: true,
+            validatorCheck: _validatorCheck,
+            validators: new address[](0),
+            created: true,
             executed: false,
             numConfirmations: 0,
             maxNumConfirmations: _maxNumConfirmations
         });
 
-        emit SubmitTransaction(msg.sender, _txIndex, _contractAddr);
+        emit SubmitTransaction(_txIndex, msg.sender, _contractAddr);
     }
 
     function confirmTransaction(uint256 _txIndex)
@@ -114,10 +120,17 @@ contract MultiSigVerification {
         notConfirmed(_txIndex)
     {
         Transaction storage transaction = transactions[_txIndex];
-        transaction.numConfirmations += 1;
+
+        transaction.validatorCheck ^= keccak256(abi.encodePacked(msg.sender));
+        transaction.numConfirmations++;
+        transaction.validators.push(msg.sender);
         isConfirmed[_txIndex][msg.sender] = true;
 
-        emit ConfirmTransaction(msg.sender, _txIndex);
+        emit ConfirmTransaction(
+            _txIndex,
+            msg.sender,
+            transaction.numConfirmations
+        );
     }
 
     function executeTransaction(uint256 _txIndex)
@@ -133,9 +146,14 @@ contract MultiSigVerification {
             "cannot execute tx"
         );
 
+        if (transaction.validatorCheck != bytes32(0)) {
+            emit InvalidValidators(_txIndex);
+            return;
+        }
+
         transaction.executed = true;
 
-        emit ExecuteTransaction(msg.sender, _txIndex);
+        emit ExecuteTransaction(_txIndex, msg.sender);
     }
 
     function revokeConfirmation(uint256 _txIndex)
@@ -147,11 +165,11 @@ contract MultiSigVerification {
         Transaction storage transaction = transactions[_txIndex];
 
         require(isConfirmed[_txIndex][msg.sender], "tx not confirmed");
-
-        transaction.numConfirmations -= 1;
+        
+        transaction.numConfirmations--;
         isConfirmed[_txIndex][msg.sender] = false;
 
-        emit RevokeConfirmation(msg.sender, _txIndex);
+        emit RevokeConfirmation(_txIndex, msg.sender);
     }
 
     function getValidators() public view returns (address[] memory) {
