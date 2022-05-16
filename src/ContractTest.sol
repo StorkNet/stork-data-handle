@@ -9,10 +9,10 @@ contract ContractTest {
     }
 
     address payable private owner;
-    address payable immutable dataControlContract;
+    address payable public immutable dataControlContract;
     
-    bytes constant createContract = abi.encodeWithSignature("addStorkContract()");
-    bytes private fundContract = abi.encodeWithSignature("fundStorkContract(address)", address(this));
+    bytes constant public createContract = abi.encodeWithSignature("addStorkContract()");
+    bytes public fundContract = abi.encodeWithSignature("fundStorkContract(address)", address(this));
 
     constructor(address payable _dataControlAddr) payable {
         dataControlContract = _dataControlAddr;
