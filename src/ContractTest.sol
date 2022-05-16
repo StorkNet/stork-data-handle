@@ -2,30 +2,33 @@
 pragma solidity ^0.8.10;
 
 contract ContractTest {
-    
-    modifier OnlyOwner {
+    modifier OnlyOwner() {
         require(msg.sender == owner, "Not owner");
         _;
     }
 
     address payable private owner;
     address payable public immutable dataControlContract;
-    
-    bytes constant public createContract = abi.encodeWithSignature("addStorkContract()");
-    bytes public fundContract = abi.encodeWithSignature("fundStorkContract(address)", address(this));
+
+    string public constant createContract = "addStorkContract()";
+    string public constant fundContract = "fundStorkContract(address)";
 
     constructor(address payable _dataControlAddr) payable {
         dataControlContract = _dataControlAddr;
-        (bool sent, ) = dataControlContract.call{value: msg.value}(createContract);
+        (bool sent, ) = _dataControlAddr.call{value: msg.value}(
+            abi.encodeWithSignature(createContract)
+        );
         require(sent, "Failed to send Ether");
     }
-    
+
     function contractFunding() external payable {
-        (bool sent, ) = dataControlContract.call{value: msg.value}(fundContract);
+        (bool sent, ) = dataControlContract.call{value: msg.value}(
+            abi.encodeWithSignature(fundContract, "this")
+        );
         require(sent, "Failed to fund contract");
     }
 
-    function getBalance(address addr) public view returns (uint) {
+    function getBalance(address addr) public view returns (uint256) {
         return addr.balance;
     }
 }

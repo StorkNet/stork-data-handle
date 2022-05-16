@@ -32,6 +32,7 @@ contract DataControlContract {
 
     uint256 private minStake;
     uint256 private costPerTx;
+    uint256 public totalFunding;
 
     address public immutable multiSigWallet;
 
@@ -77,12 +78,11 @@ contract DataControlContract {
     }
 
     function storkNodeTxBatcher(
-        // uint256 txId,
-        address[] calldata txStorkAddrs,
-        uint256[] calldata _txCounts
-    ) public onlyMultiSigWallet {
-        for (uint256 i = 0; i < txStorkAddrs.length; ++i) {
-            storkNodes[txStorkAddrs[i]].txCount += _txCounts[i];
+        address[] calldata _txNodeAddrs,
+        uint256[] calldata _txNodeCounts
+    ) external onlyMultiSigWallet {
+        for (uint256 i = 0; i < _txNodeAddrs.length; ++i) {
+            storkNodes[_txNodeAddrs[i]].txCount += _txNodeCounts[i];
         }
     }
 
@@ -105,9 +105,13 @@ contract DataControlContract {
     function fundStorkContract(address _storkContractAddr) public payable {
         require(msg.value > minStake, "Funds must be greater than 0");
         require(msg.sender != address(0), "Can't be null address");
-        
+
         storkContracts[_storkContractAddr].txCount += msg.value / costPerTx;
-        emit ContractFunded(_storkContractAddr, msg.value / costPerTx, storkContracts[_storkContractAddr].txCount);
+        emit ContractFunded(
+            _storkContractAddr,
+            msg.value / costPerTx,
+            storkContracts[_storkContractAddr].txCount
+        );
     }
 
     /// @notice Updates the number of data storing Txs that were involved with this StorkContract
@@ -118,15 +122,18 @@ contract DataControlContract {
     function contractTxBatcher(
         uint256 txId,
         address[] calldata _txContractAddrs,
-        uint256[] calldata _txCounts
-    ) public onlyMultiSigWallet {
+        uint256[] calldata _txContractCounts
+    ) external onlyMultiSigWallet {
         bool txBatchingClean = true;
         for (uint256 i = 0; i < _txContractAddrs.length; ++i) {
-            if(storkContracts[_txContractAddrs[i]].txCount >  _txCounts[i]){
+            if (
+                storkContracts[_txContractAddrs[i]].txCount >
+                _txContractCounts[i]
+            ) {
                 emit ContractOutOfFund(txId, _txContractAddrs[i]);
                 txBatchingClean = false;
-            }            
-            storkContracts[_txContractAddrs[i]].txCount -= _txCounts[i];
+            }
+            storkContracts[_txContractAddrs[i]].txCount -= _txContractCounts[i];
         }
         emit BatchUpdate(txId, txBatchingClean);
     }
@@ -136,23 +143,36 @@ contract DataControlContract {
     function changeTxCost(uint256 newCostPerTx) public onlyMultiSigWallet {
         costPerTx = newCostPerTx;
         emit NewCostPerTx(newCostPerTx);
-    } 
+    }
 
     function changeMinStake(uint256 newMinStake) public onlyMultiSigWallet {
         minStake = newMinStake;
         emit NewMinStake(newMinStake);
-    } 
-
+    }
 
     fallback() external payable {}
-    receive() external payable {}
-    
+
+    receive() external payable {
+        emit Deposit(msg.sender, msg.value);
+    }
+
+    event Deposit(address indexed _addr, uint256 _value);
     event NewCostPerTx(uint256 indexed newCostPerTx);
     event NewMinStake(uint256 indexed newMinStake);
     event NodeStaked(address indexed newNode, uint256 time);
     event NodeStakeExtended(address indexed newNode, uint256 newTime);
-    event ContractCreated(address indexed newContract, uint256 indexed fundValue);
-    event ContractFunded(address indexed oldContract, uint256 indexed fundValue, uint256 newFundTotal);
+    event ContractCreated(
+        address indexed newContract,
+        uint256 indexed fundValue
+    );
+    event ContractFunded(
+        address indexed oldContract,
+        uint256 indexed fundValue,
+        uint256 newFundTotal
+    );
     event BatchUpdate(uint256 indexed txId, bool indexed updateStatus);
-    event ContractOutOfFund(uint256 indexed txId, address indexed contractOnLowFund);
+    event ContractOutOfFund(
+        uint256 indexed txId,
+        address indexed contractOnLowFund
+    );
 }
