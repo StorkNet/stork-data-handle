@@ -2,11 +2,7 @@
 pragma solidity ^0.8.10;
 
 contract MultiSigVerification {
-    event SubmitTransaction(
-        uint256 indexed txIndex,
-        address indexed validator,
-        address indexed contractAddr
-    );
+    event SubmitTransaction(uint256 indexed txIndex, address indexed validator);
     event ConfirmTransaction(
         uint256 indexed txIndex,
         address indexed validator,
@@ -28,12 +24,11 @@ contract MultiSigVerification {
 
     struct Tx {
         address[] txContractAddrs;
-        address[] txContractCounts;
+        uint256[] txContractCounts;
         address[] txNodeAddrs;
-        address[] txNodeCounts;
+        uint256[] txNodeCounts;
     }
     struct Transaction {
-        address contractAddr;
         bytes32 validatorCheck;
         address[] validators;
         Tx data;
@@ -50,12 +45,12 @@ contract MultiSigVerification {
 
     uint256 private txCount;
 
-    address public immutable dataControlContract;
+    address public dataControlContract;
 
     string public constant nodeTxBatcher =
         "storkNodeTxBatcher(address[], uint256[])";
     string public constant contractTxBatcher =
-        "contractTxBatcher( uint256, address[], uint256[])";
+        "contractTxBatcher(uint256, address[], uint256[])";
 
     modifier onlyValidator() {
         require(isValidator[msg.sender], "not validator");
@@ -79,8 +74,7 @@ contract MultiSigVerification {
 
     constructor(
         address[] memory _validators,
-        uint256 _minNumConfirmationsRequired,
-        address _dataControlAddr
+        uint256 _minNumConfirmationsRequired
     ) {
         require(_validators.length > 0, "validators required");
         require(
@@ -100,17 +94,20 @@ contract MultiSigVerification {
         }
 
         minNumConfirmationsRequired = _minNumConfirmationsRequired;
+    }
+
+    function setDataControlContract(address _dataControlAddr) public {
+        require(dataControlContract == address(0), "contract already set");
         dataControlContract = _dataControlAddr;
     }
 
     function submitTransaction(
         uint256 _txIndex,
-        address _contractAddr,
         bytes32 _validatorCheck,
         address[] calldata txContractAddrs,
-        address[] calldata txContractCounts,
+        uint256[] calldata txContractCounts,
         address[] calldata txNodeAddrs,
-        address[] calldata txNodeCounts,
+        uint256[] calldata txNodeCounts,
         uint256 _maxNumConfirmations
     ) public onlyValidator {
         require(transactions[_txIndex].created == false, "tx already exists");
@@ -118,14 +115,14 @@ contract MultiSigVerification {
         txCount++;
 
         transactions[_txIndex] = Transaction({
-            contractAddr: _contractAddr,
             validatorCheck: _validatorCheck,
             validators: new address[](0),
-            data: Tx(
-                txContractAddrs,
-                txContractCounts,
-                txNodeAddrs,
-                txNodeCounts
+            data: Tx({
+                txContractAddrs: txContractAddrs,
+                txContractCounts: txContractCounts,
+                txNodeAddrs: txNodeAddrs,
+                txNodeCounts: txNodeCounts
+            }
             ),
             created: true,
             executed: false,
@@ -133,7 +130,7 @@ contract MultiSigVerification {
             maxNumConfirmations: _maxNumConfirmations
         });
 
-        emit SubmitTransaction(_txIndex, msg.sender, _contractAddr);
+        emit SubmitTransaction(_txIndex, msg.sender);
     }
 
     function confirmTransaction(uint256 _txIndex)
