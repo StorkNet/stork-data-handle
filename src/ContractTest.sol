@@ -23,7 +23,7 @@ contract ContractTest {
 
     function contractFunding() external payable {
         (bool sent, ) = dataControlContract.call{value: msg.value}(
-            abi.encodeWithSignature(fundContract, "this")
+            abi.encodeWithSignature(fundContract, this)
         );
         require(sent, "Failed to fund contract");
     }
