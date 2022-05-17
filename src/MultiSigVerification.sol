@@ -15,52 +15,6 @@ contract DataControlContract {
 }
 
 contract MultiSigVerification {
-    event SubmitTransaction(uint256 indexed txIndex, address indexed validator);
-    event ConfirmTransaction(
-        uint256 indexed txIndex,
-        address indexed validator,
-        uint256 indexed validatorCount
-    );
-    event RevokeConfirmation(
-        uint256 indexed txIndex,
-        address indexed validator
-    );
-    event InvalidValidators(uint256 indexed txIndex);
-    event ExecuteTransaction(
-        uint256 indexed txIndex,
-        address indexed validator
-    );
-
-    address[] public validators;
-    mapping(address => bool) public isValidator;
-    uint256 public minNumConfirmationsRequired;
-
-    struct Tx {
-        address[] txContractAddrs;
-        uint256[] txContractCounts;
-        address[] txNodeAddrs;
-        uint256[] txNodeCounts;
-    }
-    struct Transaction {
-        bytes32 validatorCheck;
-        address[] validators;
-        Tx data;
-        bool created;
-        bool executed;
-        uint256 numConfirmations;
-        uint256 maxNumConfirmations;
-    }
-
-    // mapping from tx index => validator => bool
-    mapping(uint256 => mapping(address => bool)) public isConfirmed;
-
-    mapping(uint256 => Transaction) public transactions;
-
-    uint256 private txCount;
-
-    DataControlContract public dataControlContract;
-    bool public dataControlContractSet;
-
     modifier onlyValidator() {
         require(isValidator[msg.sender], "not validator");
         _;
@@ -80,6 +34,38 @@ contract MultiSigVerification {
         require(!isConfirmed[_txIndex][msg.sender], "tx already confirmed");
         _;
     }
+
+    struct Tx {
+        address[] txContractAddrs;
+        uint256[] txContractCounts;
+        address[] txNodeAddrs;
+        uint256[] txNodeCounts;
+    }
+    
+    struct Transaction {
+        bytes32 validatorCheck;
+        address[] validators;
+        Tx data;
+        bool created;
+        bool executed;
+        uint256 numConfirmations;
+        uint256 maxNumConfirmations;
+    }
+
+    address[] public validators;
+    mapping(address => bool) public isValidator;
+
+    uint256 public minNumConfirmationsRequired;
+
+    // mapping from tx index => validator => bool
+    mapping(uint256 => mapping(address => bool)) public isConfirmed;
+
+    mapping(uint256 => Transaction) public transactions;
+
+    uint256 private txCount;
+
+    DataControlContract public dataControlContract;
+    bool public dataControlContractSet;
 
     constructor(
         address[] memory _validators,
@@ -181,18 +167,18 @@ contract MultiSigVerification {
             return;
         }
 
-
         Tx memory transactionData = transaction.data;
 
         dataControlContract.storkNodeTxBatcher(
-                transactionData.txNodeAddrs,
-                transactionData.txNodeCounts);
+            transactionData.txNodeAddrs,
+            transactionData.txNodeCounts
+        );
 
         dataControlContract.contractTxBatcher(
-                _txIndex,
-                transactionData.txContractAddrs,
-                transactionData.txContractCounts
-            );
+            _txIndex,
+            transactionData.txContractAddrs,
+            transactionData.txContractCounts
+        );
 
         transaction.executed = true;
 
@@ -231,4 +217,20 @@ contract MultiSigVerification {
     {
         return (transactions[_txIndex]);
     }
+
+    event SubmitTransaction(uint256 indexed txIndex, address indexed validator);
+    event ConfirmTransaction(
+        uint256 indexed txIndex,
+        address indexed validator,
+        uint256 indexed validatorCount
+    );
+    event RevokeConfirmation(
+        uint256 indexed txIndex,
+        address indexed validator
+    );
+    event InvalidValidators(uint256 indexed txIndex);
+    event ExecuteTransaction(
+        uint256 indexed txIndex,
+        address indexed validator
+    );
 }
