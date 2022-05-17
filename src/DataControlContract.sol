@@ -83,7 +83,10 @@ contract DataControlContract {
     /// @notice Allows an address to add themselves as a StorkNode if they send a transaction greater than the minStake
     /// @dev Checks if the tx sender sent enough funds to be a StorkNode and if so, adds them to the storkNodes mapping
     function addStorkNode() external payable {
-        require(msg.value > minStake, "Deposit must be greater than the minStake");
+        require(
+            msg.value > minStake,
+            "Deposit must be greater than the minStake"
+        );
         require(msg.sender != address(0), "Can't be null address");
 
         storkNodes[msg.sender] = StorkNode({
@@ -118,9 +121,11 @@ contract DataControlContract {
         address[] calldata _txNodeAddrs,
         uint256[] calldata _txNodeCounts
     ) external onlyMultiSigWallet {
-
         // makes sure the Address array and the Address Tx count arrays are the same length
-        require(_txNodeAddrs.length == _txNodeCounts.length, "Length of arrays must be equal");
+        require(
+            _txNodeAddrs.length == _txNodeCounts.length,
+            "Length of arrays must be equal"
+        );
 
         for (uint256 i = 0; i < _txNodeAddrs.length; ++i) {
             storkNodes[_txNodeAddrs[i]].txCount += _txNodeCounts[i];
@@ -136,6 +141,7 @@ contract DataControlContract {
 
         // Computes the max number of transactions that can be handled by the Contract
         storkContracts[msg.sender] = StorkContract(msg.value / costPerTx, true);
+        
         emit ContractCreated(msg.sender, msg.value / costPerTx);
     }
 
