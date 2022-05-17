@@ -47,12 +47,13 @@ contract DataControlContract {
     /// @dev Reduces the amount staked by the StorkContract
     uint256 public costPerTx;
 
+    /// @notice Stake duration
+    uint256 public constant stakeTime = 4 weeks;
+    
     /// @notice The cost per transaction to be paid by the StorkContract
     /// @dev Reduces the amount staked by the StorkContract
     address public immutable multiSigVerifierContract;
 
-    /// @notice Stake duration
-    uint256 public constant stakeTime = 4 weeks;
 
     /// @notice Has the data of all StorkNodes
     /// @dev Maps an address to a StorkNode struct containing the data about the address
