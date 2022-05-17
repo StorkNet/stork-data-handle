@@ -162,18 +162,22 @@ contract DataControlContract {
         );
     }
 
-    /// @notice Updates the number of data storing Txs that were involved with this StorkContract
-    /// @dev This function is only executable by the StorkMultiSig wallet as we treat batches of Txs as a single
-    ///      transaction on the main EVM chain
-    /// @param _txContractAddrs contains the list of StorkContract addresses that had any txs involving data change
-    ///        on the StorkNet that were sent to them
+    /// @notice Batch update of the StorkContracts based on the number of transactions they were involved with
+    /// @dev Updates the number of transactions that a StorkContract can handle after this batch update
+    /// @param txId The id of the batch Tx
+    /// @param _txContractAddrs an array of the StorkContracts involved in the batch Tx
+    /// @param _txContractCounts an array of the count of Txs handled for the StorkContracts involved in the batch Tx
     function contractTxBatcher(
         uint256 txId,
         address[] calldata _txContractAddrs,
         uint256[] calldata _txContractCounts
     ) external onlyMultiSigWallet {
+        
+        /// @notice Checks if the batch went smoothly without any contracts involved in errors
+        /// @dev If a StorkContract has run out of Txs, emit a error event stating the same
         bool txBatchingClean = true;
         for (uint256 i = 0; i < _txContractAddrs.length; ++i) {
+            // checks if the StorkContract has run out of Txs
             if (
                 storkContracts[_txContractAddrs[i]].txLeft >
                 _txContractCounts[i]
@@ -181,8 +185,11 @@ contract DataControlContract {
                 emit ContractOutOfFund(txId, _txContractAddrs[i]);
                 txBatchingClean = false;
             }
+
+            // updates the number of transactions left for the StorkContract 
             storkContracts[_txContractAddrs[i]].txLeft -= _txContractCounts[i];
         }
+
         emit BatchUpdate(txId, txBatchingClean);
     }
 
