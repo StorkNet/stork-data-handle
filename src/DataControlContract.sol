@@ -64,9 +64,9 @@ contract DataControlContract {
 
     /// @notice Initializes the contract
     /// @dev Sets up the contract with minimum stake, cost per tx, and the address of the multi sig verifier
-    /// @param _minStake the minumum stake required to be a StorkNode or StorkContract
-    /// @param _costPerTx the cost per transaction to be paid by the StorkContract
-    /// @param _multiSigVerifierContract the address of the multi sig verifier
+    /// @param _minStake The minumum stake required to be a StorkNode or StorkContract
+    /// @param _costPerTx The cost per transaction to be paid by the StorkContract
+    /// @param _multiSigVerifierContract The address of the multi sig verifier
 
     constructor(
         uint256 _minStake,
@@ -99,13 +99,13 @@ contract DataControlContract {
 
     /// @notice Increases the fund of a StorkNode by the amount sent
     /// @dev Increases the fund of a StorkNode by the amount sent and also the duration of the stake for the StorkNode
-    /// @param _days increases the duration of the stake by the number of days sent
+    /// @param _days Increases the duration of the stake by the number of days sent
     function fundStorkNodeStake(uint256 _days) external payable {
         require(msg.value > 0, "Stake must be greater than 0");
 
         storkNodes[msg.sender].stakeValue += msg.value;
 
-        // extends duration of the stake by the number of days sent by converting the days to seconds
+        // Extends duration of the stake by the number of days sent by converting the days to seconds
         storkNodes[msg.sender].stakeEndTime += block.timestamp + _days * 1 days;
 
         emit NodeStakeExtended(msg.sender, storkNodes[msg.sender].stakeEndTime);
@@ -113,13 +113,13 @@ contract DataControlContract {
 
     /// @notice Batch update of the StorkNode data based on the number of transactions they handled
     /// @dev Updates the count of transactions handled by the StorkNode since the last Batch update
-    /// @param _txNodeAddrs an array of all the addresses of the StorkNodes involved in the batch Tx
-    /// @param _txNodeCounts an array of the count of Txs handled by the StorkNodes involved in the batch Tx
+    /// @param _txNodeAddrs An array of all the addresses of the StorkNodes involved in the batch Tx
+    /// @param _txNodeCounts An array of the count of Txs handled by the StorkNodes involved in the batch Tx
     function storkNodeTxBatcher(
         address[] calldata _txNodeAddrs,
         uint256[] calldata _txNodeCounts
     ) external onlyMultiSigWallet {
-        // makes sure the Address array and the Address Tx count arrays are the same length
+        // Makes sure the Address array and the Address Tx count arrays are the same length
         require(
             _txNodeAddrs.length == _txNodeCounts.length,
             "Length of arrays must be equal"
@@ -133,7 +133,7 @@ contract DataControlContract {
     // -----------------------------------------------------------------------------------------------------------------
 
     /// @notice Allows a Contract to add themselves as a StorkContract if they send a transaction greater than minStake
-    /// @dev using the Funds received compute the max number of transactions that can be trasacted by the Contract
+    /// @dev Using the Funds received compute the max number of transactions that can be trasacted by the Contract
     function addStorkContract() external payable {
         require(msg.value > minStake, "Funds must be greater than minStake");
 
@@ -148,13 +148,13 @@ contract DataControlContract {
 
     /// @notice Any user can further fund a StorkContract
     /// @dev Increase the number of transactions of the StorkContract based on the funding
-    /// @param _storkContractAddr address of the stork contract that is being funded
+    /// @param _storkContractAddr Address of the stork contract that is being funded
     function fundStorkContract(address _storkContractAddr) external payable {
         require(msg.value > 0, "Funds must be greater than 0");
         require(msg.sender != address(0), "Can't be null address");
 
         storkContracts[_storkContractAddr].txLeft += msg.value / costPerTx;
-        
+
         emit ContractFunded(
             _storkContractAddr,
             msg.value / costPerTx,
@@ -165,28 +165,32 @@ contract DataControlContract {
     /// @notice Batch update of the StorkContracts based on the number of transactions they were involved with
     /// @dev Updates the number of transactions that a StorkContract can handle after this batch update
     /// @param txId The id of the batch Tx
-    /// @param _txContractAddrs an array of the StorkContracts involved in the batch Tx
-    /// @param _txContractCounts an array of the count of Txs handled for the StorkContracts involved in the batch Tx
+    /// @param _txContractAddrs An array of the StorkContracts involved in the batch Tx
+    /// @param _txContractCounts An array of the count of Txs handled for the StorkContracts involved in the batch Tx
     function contractTxBatcher(
         uint256 txId,
         address[] calldata _txContractAddrs,
         uint256[] calldata _txContractCounts
     ) external onlyMultiSigWallet {
-        
+
+        // Probably not needed because of processing on the StorkNet
+
         /// @notice Checks if the batch went smoothly without any contracts involved in errors
         /// @dev If a StorkContract has run out of Txs, emit a error event stating the same
         bool txBatchingClean = true;
+
         for (uint256 i = 0; i < _txContractAddrs.length; ++i) {
-            // checks if the StorkContract has run out of Txs
+            // Checks if the StorkContract has run out of Txs
             if (
                 storkContracts[_txContractAddrs[i]].txLeft >
                 _txContractCounts[i]
             ) {
+                // If it has, emit an event
                 emit ContractOutOfFund(txId, _txContractAddrs[i]);
                 txBatchingClean = false;
             }
 
-            // updates the number of transactions left for the StorkContract 
+            // Updates the number of transactions left for the StorkContract
             storkContracts[_txContractAddrs[i]].txLeft -= _txContractCounts[i];
         }
 
@@ -195,37 +199,86 @@ contract DataControlContract {
 
     // -----------------------------------------------------------------------------------------------------------------
 
-    function changeTxCost(uint256 newCostPerTx) external onlyMultiSigWallet {
-        costPerTx = newCostPerTx;
-        emit NewCostPerTx(newCostPerTx);
+    /// @notice Changes the minimum transaction cost for a StorkContract
+    /// @dev Sets the new costPerTx
+    /// @param _newCostPerTx The new costPerTx
+    function changeTxCost(uint256 _newCostPerTx) external onlyMultiSigWallet {
+        costPerTx = _newCostPerTx;
+        emit NewCostPerTx(_newCostPerTx);
     }
 
-    function changeMinStake(uint256 newMinStake) external onlyMultiSigWallet {
-        minStake = newMinStake;
-        emit NewMinStake(newMinStake);
+    /// @notice Changes the minimum stake for a StorkContract or StorkNode
+    /// @dev Sets the new minimum stake
+    /// @param _newMinStake The new minimum stake
+    function changeMinStake(uint256 _newMinStake) external onlyMultiSigWallet {
+        minStake = _newMinStake;
+        emit NewMinStake(_newMinStake);
     }
 
+    /// @notice Fallback function to receive funds
     fallback() external payable {}
 
+    /// @notice Fallback function to receive funds
+    /// @dev Emits a deposit event
     receive() external payable {
         emit Deposit(msg.sender, msg.value);
     }
 
-    event Deposit(address indexed _addr, uint256 _value);
+    /// @notice Event for when any ETH is deposited in the contract
+    /// @dev When a deposit occurs emit this event
+    /// @param addr The address depositing the ETH
+    /// @param value The value of the deposit
+    event Deposit(address indexed addr, uint256 value);
+
+    /// @notice The updated cost per Tx
+    /// @dev When a the cost per Tx is updated emit this event
+    /// @param newCostPerTx The new cost per Tx
     event NewCostPerTx(uint256 indexed newCostPerTx);
+
+    /// @notice The updated minimum stake
+    /// @dev When a the minimum stake is updated emit this event
+    /// @param newMinStake The new minimum stake
     event NewMinStake(uint256 indexed newMinStake);
+
+    /// @notice The creation of a new StorkNode
+    /// @dev When a StorkNode is created, emit this event
+    /// @param newNode The address of the new StorkNode
+    /// @param time The stake duration of the created StorkNode
     event NodeStaked(address indexed newNode, uint256 time);
+
+    /// @notice The updated stake duration of a StorkNode
+    /// @dev When a StorkNode's stake duration is updated my sending a new value, emit this event
+    /// @param newNode The address of the new StorkNode
+    /// @param newTime The new stake duration of the StorkNode
     event NodeStakeExtended(address indexed newNode, uint256 newTime);
-    event ContractCreated(
-        address indexed newContract,
-        uint256 indexed fundValue
-    );
+
+    /// @notice The creation of a new StorkContract
+    /// @dev When a StorkContract is created, emit this event
+    /// @param newContract The address of the new StorkContract
+    /// @param txLeft The fund value of the new StorkContract in terms of Txs
+    event ContractCreated(address indexed newContract, uint256 txLeft);
+
+    /// @notice The updated fund value of a StorkContract in terms of Txs left 
+    /// @dev When the fund value of a StorkContract is increased, increase the Txs Left and emit this event
+    /// @param oldContract a parameter just like in doxygen (must be followed by parameter name)
+    /// @param txLeft The increase in fund value of the new StorkContract in terms of Txs
+    /// @param newFundTotal The new fund value of the new StorkContract in terms of Txs
     event ContractFunded(
         address indexed oldContract,
-        uint256 indexed fundValue,
+        uint256 txLeft,
         uint256 newFundTotal
     );
+
+    /// @notice Event to tell the status of the batch update
+    /// @dev If the batch update went smoothly or with errors, emit this event
+    /// @param txId The transaction ID of the batch update
+    /// @param updateStatus Status updates of true if smooth else false
     event BatchUpdate(uint256 indexed txId, bool indexed updateStatus);
+
+    /// @notice Tells if the contract has run out of funds
+    /// @dev If the contract does not have enough funds to handle more Txs in the current batch update, emit this event
+    /// @param txId The transaction ID of the batch update
+    /// @param contractOnLowFund The address of the StorkContract that ran out of funds
     event ContractOutOfFund(
         uint256 indexed txId,
         address indexed contractOnLowFund
