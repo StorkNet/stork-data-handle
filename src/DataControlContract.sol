@@ -150,10 +150,11 @@ contract DataControlContract {
     /// @dev Increase the number of transactions of the StorkContract based on the funding
     /// @param _storkContractAddr address of the stork contract that is being funded
     function fundStorkContract(address _storkContractAddr) external payable {
-        require(msg.value > minStake, "Funds must be greater than 0");
+        require(msg.value > 0, "Funds must be greater than 0");
         require(msg.sender != address(0), "Can't be null address");
 
         storkContracts[_storkContractAddr].txLeft += msg.value / costPerTx;
+        
         emit ContractFunded(
             _storkContractAddr,
             msg.value / costPerTx,
