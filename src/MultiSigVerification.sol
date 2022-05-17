@@ -59,7 +59,7 @@ contract MultiSigVerification {
     uint256 private txCount;
 
     DataControlContract public dataControlContract;
-    bool dataControlContractSet;
+    bool public dataControlContractSet;
 
     modifier onlyValidator() {
         require(isValidator[msg.sender], "not validator");
