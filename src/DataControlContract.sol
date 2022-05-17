@@ -118,7 +118,7 @@ contract DataControlContract {
         address[] calldata _txNodeAddrs,
         uint256[] calldata _txNodeCounts
     ) external onlyMultiSigWallet {
-        
+
         // makes sure the Address array and the Address Tx count arrays are the same length
         require(_txNodeAddrs.length == _txNodeCounts.length, "Length of arrays must be equal");
 
@@ -129,12 +129,12 @@ contract DataControlContract {
 
     // -----------------------------------------------------------------------------------------------------------------
 
-    /// @notice A StorkContract is a contract that uses StorkNet to decouple data from the EVM contract
-    /// @dev On the creation of a StorkContract funds must be transferred that are used to compute the
-    ///      total number of transactions that it can handle
+    /// @notice Allows a Contract to add themselves as a StorkContract if they send a transaction greater than minStake
+    /// @dev using the Funds received compute the max number of transactions that can be trasacted by the Contract
     function addStorkContract() external payable {
-        require(msg.value > minStake, "Funds must be greater than 0");
+        require(msg.value > minStake, "Funds must be greater than minStake");
 
+        // Computes the max number of transactions that can be handled by the Contract
         storkContracts[msg.sender] = StorkContract(msg.value / costPerTx, true);
         emit ContractCreated(msg.sender, msg.value / costPerTx);
     }
