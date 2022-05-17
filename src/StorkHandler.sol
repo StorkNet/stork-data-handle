@@ -88,8 +88,8 @@ contract StorkHandler {
         return (abi.decode(_data, (StorkDataType[])));
     }
 
-    /// @notice Creates a new StorkDataType based on the parameters given 
-    /// @dev Links the StorkDataType with unique name and id, then emits an event for off-chain processing 
+    /// @notice Creates a new StorkDataType based on the parameters given
+    /// @dev Links the StorkDataType with unique name and id, then emits an event for off-chain processing
     /// @param _name The name of the StorkDataType
     /// @param _data The bytes version of the StorkDataType
     function createNewType(string calldata _name, bytes calldata _data)
@@ -99,19 +99,38 @@ contract StorkHandler {
 
         dataType[_name] = dataTypeCount;
 
-        emit StorkType(msg.sender, dataTypeCount, _data);
+        emit StorkType(msg.sender, dataTypeCount, _name, _data);
         dataTypeCount++;
     }
 
+    /// @notice Stores the StorkDataType in the StorkNet
+    /// @dev The event emitted tells StorkNet about the data being stored, it's type, and the contract associated
+    /// @param _type The StorkDataType
+    /// @param _data The value of the data being stored
     function storeData(string memory _type, bytes memory _data) internal {
         emit StorkStore(msg.sender, _type, _data);
     }
 
+    /// @notice Lets StorkNet know that a new data type has been created for this contract
+    /// @dev This is so that we don't need to store the data type in this contract as they take a lot of space hence gas
+    /// @param _from The address of the contract that created the new StorkDataType
+    /// @param _typeId The id of the created StorkDataType
+    /// @param _typeName The id of the created StorkDataType
+    /// @param _data The bytes version of the StorkDataType
     event StorkType(
         address indexed _from,
         uint256 indexed _typeId,
+        string indexed _typeName,
         bytes _data
     );
 
-    event StorkStore(address indexed _from, string indexed _type, bytes _data);
+    /// @notice Lets StorkNet know that this contract has a new Store request
+    /// @param _from The address of the contract that created the new StorkDataType
+    /// @param _typeName The data type name
+    /// @param _data The data being stored
+    event StorkStore(
+        address indexed _from,
+        string indexed _typeName,
+        bytes _data
+    );
 }
