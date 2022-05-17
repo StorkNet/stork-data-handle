@@ -47,12 +47,13 @@ contract DataControlContract {
     /// @dev Reduces the amount staked by the StorkContract
     uint256 public costPerTx;
 
+    /// @notice Stake duration
+    uint256 public constant stakeTime = 4 weeks;
+    
     /// @notice The cost per transaction to be paid by the StorkContract
     /// @dev Reduces the amount staked by the StorkContract
     address public immutable multiSigVerifierContract;
 
-    /// @notice Stake duration
-    uint256 public constant stakeTime = 4 weeks;
 
     /// @notice Has the data of all StorkNodes
     /// @dev Maps an address to a StorkNode struct containing the data about the address
@@ -160,6 +161,13 @@ contract DataControlContract {
             msg.value / costPerTx,
             storkContracts[_storkContractAddr].txLeft
         );
+    }
+
+    /// @notice Gets pending transactions for a StorkContract
+    /// @param _storkContractAddr Address of the stork contract that is being funded
+    /// @return The number of transactions left for the Contract to consume
+    function txLeftStorkContract(address _storkContractAddr) external view returns(uint256) {
+        return(storkContracts[_storkContractAddr].txLeft);
     }
 
     /// @notice Batch update of the StorkContracts based on the number of transactions they were involved with
