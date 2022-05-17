@@ -17,7 +17,8 @@ contract DataControlContract {
         require(msg.sender == multiSigWallet, "Not multi sig wallet");
         _;
     }
-
+    
+    /// @dev Stores data about the StorkNodes
     struct StorkNode {
         uint256 stakeValue;
         uint256 stakeEndTime;
@@ -30,8 +31,11 @@ contract DataControlContract {
         bool isActive;
     }
 
-    uint256 private minStake;
-    uint256 private costPerTx;
+    /// @notice Explain to an end user what this does
+    /// @dev Explain to a developer any extra details
+    /// @return Documents the return variables of a contract’s function state variable
+    uint256 public minStake;
+    uint256 public costPerTx;
     uint256 public totalFunding;
 
     address public immutable multiSigWallet;
