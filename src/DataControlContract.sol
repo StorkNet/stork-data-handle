@@ -53,11 +53,22 @@ contract DataControlContract {
     /// @dev Reduces the amount staked by the StorkContract
     address public immutable multiSigVerifierContract;
 
-    /// @notice 1 hour in minutes
+    /// @notice Stake duration
     uint256 public constant stakeTime = 4 weeks;
 
+    /// @notice Has the data of all StorkNodes
+    /// @dev Maps an address to a StorkNode struct containing the data about the address
     mapping(address => StorkNode) public storkNodes;
+
+    /// @notice Has the data of all StorkContracts
+    /// @dev Maps an address to a StorkContract struct containing the data about the address
     mapping(address => StorkContract) public storkContracts;
+
+    /// @notice Initializes the contract
+    /// @dev Sets up the contract with minimum stake, cost per tx, and the address of the multi sig verifier
+    /// @param _minStake the minumum stake required to be a StorkNode or StorkContract
+    /// @param _costPerTx the cost per transaction to be paid by the StorkContract
+    /// @param _multiSigVerifierContract the address of the multi sig verifier
 
     constructor(
         uint256 _minStake,
@@ -69,25 +80,30 @@ contract DataControlContract {
         multiSigVerifierContract = _multiSigVerifierContract;
     }
 
+    /// @notice Allows an address to add themselves as a StorkNode if they send a transaction greater than the minStake
+    /// @dev Checks if the tx sender sent enough funds to be a StorkNode and if so, adds them to the storkNodes mapping
     function addStorkNode() external payable {
-        require(msg.value > minStake, "Deposit must be greater than 0");
+        require(msg.value > minStake, "Deposit must be greater than the minStake");
         require(msg.sender != address(0), "Can't be null address");
 
-        storkNodes[msg.sender] = StorkNode(
-            msg.value,
-            block.timestamp + stakeTime,
-            0,
-            true
-        );
+        storkNodes[msg.sender] = StorkNode({
+            stakeValue: msg.value,
+            stakeEndTime: block.timestamp + stakeTime, //gets the end time of the stake
+            txCount: 0,
+            isActive: true
+        });
 
         emit NodeStaked(msg.sender, storkNodes[msg.sender].stakeEndTime);
     }
 
-    function fundStorkNodeStake() external payable {
-        require(msg.value > minStake, "Stake must be greater than 0");
+    /// @notice Increases the fund of a StorkNode by the amount sent
+    /// @dev Increases the fund of a StorkNode by the amount sent and also the duration of the stake for the StorkNode
+    /// @param _days increases the duration of the stake by the number of days sent
+    function fundStorkNodeStake(uint256 _days) external payable {
+        require(msg.value > 0, "Stake must be greater than 0");
 
         storkNodes[msg.sender].stakeValue += msg.value;
-        storkNodes[msg.sender].stakeEndTime += block.timestamp + stakeTime;
+        storkNodes[msg.sender].stakeEndTime += block.timestamp + _days * 1 days;
 
         emit NodeStakeExtended(msg.sender, storkNodes[msg.sender].stakeEndTime);
     }
