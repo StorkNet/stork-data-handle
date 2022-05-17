@@ -2,9 +2,9 @@
 pragma solidity ^0.8.10;
 
 contract DataControlContract {
-    function addStorkContract() payable external {}
+    function addStorkContract() external payable {}
 
-    function fundStorkContract(address _contractAddr) payable external {}
+    function fundStorkContract(address _contractAddr) external payable {}
 }
 
 contract ContractTest {
