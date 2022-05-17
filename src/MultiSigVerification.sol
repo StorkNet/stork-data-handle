@@ -1,6 +1,19 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.10;
 
+contract DataControlContract {
+    function storkNodeTxBatcher(
+        address[] calldata _txNodeAddrs,
+        uint256[] calldata _txNodeCounts
+    ) external {}
+
+    function contractTxBatcher(
+        uint256 txId,
+        address[] calldata _txContractAddrs,
+        uint256[] calldata _txContractCounts
+    ) external {}
+}
+
 contract MultiSigVerification {
     event SubmitTransaction(uint256 indexed txIndex, address indexed validator);
     event ConfirmTransaction(
@@ -45,7 +58,8 @@ contract MultiSigVerification {
 
     uint256 private txCount;
 
-    address public dataControlContract;
+    DataControlContract public dataControlContract;
+    bool dataControlContractSet;
 
     string public constant nodeTxBatcher =
         "storkNodeTxBatcher(address[], uint256[])";
@@ -96,9 +110,9 @@ contract MultiSigVerification {
         minNumConfirmationsRequired = _minNumConfirmationsRequired;
     }
 
-    function setDataControlContract(address _dataControlAddr) public {
-        require(dataControlContract == address(0), "contract already set");
-        dataControlContract = _dataControlAddr;
+    function setDataControlContract(address payable _dataControlAddr) public {
+        require(dataControlContractSet == false, "contract already set");
+        dataControlContract = DataControlContract(_dataControlAddr);
     }
 
     function submitTransaction(
@@ -117,12 +131,11 @@ contract MultiSigVerification {
         transactions[_txIndex] = Transaction({
             validatorCheck: _validatorCheck,
             validators: new address[](0),
-            data: Tx({
-                txContractAddrs: txContractAddrs,
-                txContractCounts: txContractCounts,
-                txNodeAddrs: txNodeAddrs,
-                txNodeCounts: txNodeCounts
-            }
+            data: Tx(
+                txContractAddrs,
+                txContractCounts,
+                txNodeAddrs,
+                txNodeCounts
             ),
             created: true,
             executed: false,
@@ -156,6 +169,7 @@ contract MultiSigVerification {
 
     function executeTransaction(uint256 _txIndex)
         public
+        payable
         onlyValidator
         txExists(_txIndex)
         notExecuted(_txIndex)
@@ -172,29 +186,20 @@ contract MultiSigVerification {
             return;
         }
 
-        transaction.executed = true;
 
         Tx memory transactionData = transaction.data;
 
-        (bool sent, ) = dataControlContract.call(
-            abi.encodeWithSignature(
-                nodeTxBatcher,
+        dataControlContract.storkNodeTxBatcher(
                 transactionData.txNodeAddrs,
-                transactionData.txNodeCounts
-            )
-        );
-        require(sent, "Transaction failed to send");
+                transactionData.txNodeCounts);
 
-        (sent, ) = dataControlContract.call(
-            abi.encodeWithSignature(
-                contractTxBatcher,
+        dataControlContract.contractTxBatcher(
                 _txIndex,
                 transactionData.txContractAddrs,
                 transactionData.txContractCounts
-            )
-        );
+            );
 
-        require(sent, "Transaction failed to send");
+        transaction.executed = true;
 
         emit ExecuteTransaction(_txIndex, msg.sender);
     }
@@ -210,6 +215,7 @@ contract MultiSigVerification {
         require(isConfirmed[_txIndex][msg.sender], "tx not confirmed");
 
         transaction.numConfirmations--;
+        transaction.validatorCheck ^= keccak256(abi.encodePacked(msg.sender));
         isConfirmed[_txIndex][msg.sender] = false;
 
         emit RevokeConfirmation(_txIndex, msg.sender);
@@ -231,3 +237,5 @@ contract MultiSigVerification {
         return (transactions[_txIndex]);
     }
 }
+
+// ["0x5B38Da6a701c568545dCfcB03FcB875f56beddC4","0xAb8483F64d9C6d1EcF9b849Ae677dD3315835cb2"]
