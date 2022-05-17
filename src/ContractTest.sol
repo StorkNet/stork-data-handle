@@ -1,31 +1,29 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.10;
 
+contract DataControlContract {
+    function addStorkContract() payable external {}
+
+    function fundStorkContract(address _contractAddr) payable external {}
+}
+
 contract ContractTest {
     modifier OnlyOwner() {
         require(msg.sender == owner, "Not owner");
         _;
     }
 
-    address payable private owner;
-    address payable public immutable dataControlContract;
+    address payable public owner;
 
-    string public constant createContract = "addStorkContract()";
-    string public constant fundContract = "fundStorkContract(address)";
+    DataControlContract public immutable dataControlContract;
 
     constructor(address payable _dataControlAddr) payable {
-        dataControlContract = _dataControlAddr;
-        (bool sent, ) = _dataControlAddr.call{value: msg.value}(
-            abi.encodeWithSignature(createContract)
-        );
-        require(sent, "Failed to send Ether");
+        dataControlContract = DataControlContract(_dataControlAddr);
+        dataControlContract.addStorkContract{value: msg.value}();
     }
 
     function contractFunding() external payable {
-        (bool sent, ) = dataControlContract.call{value: msg.value}(
-            abi.encodeWithSignature(fundContract, "this")
-        );
-        require(sent, "Failed to fund contract");
+        dataControlContract.fundStorkContract{value: msg.value}(address(this));
     }
 
     function getBalance(address addr) public view returns (uint256) {

@@ -1,12 +1,21 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.10;
 
+contract DataControlContract {
+    function storkNodeTxBatcher(
+        address[] calldata _txNodeAddrs,
+        uint256[] calldata _txNodeCounts
+    ) external {}
+
+    function contractTxBatcher(
+        uint256 txId,
+        address[] calldata _txContractAddrs,
+        uint256[] calldata _txContractCounts
+    ) external {}
+}
+
 contract MultiSigVerification {
-    event SubmitTransaction(
-        uint256 indexed txIndex,
-        address indexed validator,
-        address indexed contractAddr
-    );
+    event SubmitTransaction(uint256 indexed txIndex, address indexed validator);
     event ConfirmTransaction(
         uint256 indexed txIndex,
         address indexed validator,
@@ -28,12 +37,11 @@ contract MultiSigVerification {
 
     struct Tx {
         address[] txContractAddrs;
-        address[] txContractCounts;
+        uint256[] txContractCounts;
         address[] txNodeAddrs;
-        address[] txNodeCounts;
+        uint256[] txNodeCounts;
     }
     struct Transaction {
-        address contractAddr;
         bytes32 validatorCheck;
         address[] validators;
         Tx data;
@@ -50,12 +58,8 @@ contract MultiSigVerification {
 
     uint256 private txCount;
 
-    address public immutable dataControlContract;
-
-    string public constant nodeTxBatcher =
-        "storkNodeTxBatcher(address[], uint256[])";
-    string public constant contractTxBatcher =
-        "contractTxBatcher( uint256, address[], uint256[])";
+    DataControlContract public dataControlContract;
+    bool dataControlContractSet;
 
     modifier onlyValidator() {
         require(isValidator[msg.sender], "not validator");
@@ -79,8 +83,7 @@ contract MultiSigVerification {
 
     constructor(
         address[] memory _validators,
-        uint256 _minNumConfirmationsRequired,
-        address _dataControlAddr
+        uint256 _minNumConfirmationsRequired
     ) {
         require(_validators.length > 0, "validators required");
         require(
@@ -100,17 +103,20 @@ contract MultiSigVerification {
         }
 
         minNumConfirmationsRequired = _minNumConfirmationsRequired;
-        dataControlContract = _dataControlAddr;
+    }
+
+    function setDataControlContract(address payable _dataControlAddr) public {
+        require(dataControlContractSet == false, "contract already set");
+        dataControlContract = DataControlContract(_dataControlAddr);
     }
 
     function submitTransaction(
         uint256 _txIndex,
-        address _contractAddr,
         bytes32 _validatorCheck,
         address[] calldata txContractAddrs,
-        address[] calldata txContractCounts,
+        uint256[] calldata txContractCounts,
         address[] calldata txNodeAddrs,
-        address[] calldata txNodeCounts,
+        uint256[] calldata txNodeCounts,
         uint256 _maxNumConfirmations
     ) public onlyValidator {
         require(transactions[_txIndex].created == false, "tx already exists");
@@ -118,7 +124,6 @@ contract MultiSigVerification {
         txCount++;
 
         transactions[_txIndex] = Transaction({
-            contractAddr: _contractAddr,
             validatorCheck: _validatorCheck,
             validators: new address[](0),
             data: Tx(
@@ -133,7 +138,7 @@ contract MultiSigVerification {
             maxNumConfirmations: _maxNumConfirmations
         });
 
-        emit SubmitTransaction(_txIndex, msg.sender, _contractAddr);
+        emit SubmitTransaction(_txIndex, msg.sender);
     }
 
     function confirmTransaction(uint256 _txIndex)
@@ -159,6 +164,7 @@ contract MultiSigVerification {
 
     function executeTransaction(uint256 _txIndex)
         public
+        payable
         onlyValidator
         txExists(_txIndex)
         notExecuted(_txIndex)
@@ -175,29 +181,20 @@ contract MultiSigVerification {
             return;
         }
 
-        transaction.executed = true;
 
         Tx memory transactionData = transaction.data;
 
-        (bool sent, ) = dataControlContract.call(
-            abi.encodeWithSignature(
-                nodeTxBatcher,
+        dataControlContract.storkNodeTxBatcher(
                 transactionData.txNodeAddrs,
-                transactionData.txNodeCounts
-            )
-        );
-        require(sent, "Transaction failed to send");
+                transactionData.txNodeCounts);
 
-        (sent, ) = dataControlContract.call(
-            abi.encodeWithSignature(
-                contractTxBatcher,
+        dataControlContract.contractTxBatcher(
                 _txIndex,
                 transactionData.txContractAddrs,
                 transactionData.txContractCounts
-            )
-        );
+            );
 
-        require(sent, "Transaction failed to send");
+        transaction.executed = true;
 
         emit ExecuteTransaction(_txIndex, msg.sender);
     }
@@ -213,6 +210,7 @@ contract MultiSigVerification {
         require(isConfirmed[_txIndex][msg.sender], "tx not confirmed");
 
         transaction.numConfirmations--;
+        transaction.validatorCheck ^= keccak256(abi.encodePacked(msg.sender));
         isConfirmed[_txIndex][msg.sender] = false;
 
         emit RevokeConfirmation(_txIndex, msg.sender);

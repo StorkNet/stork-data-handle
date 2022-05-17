@@ -52,7 +52,7 @@ contract DataControlContract {
         multiSigWallet = _multiSigWallet;
     }
 
-    function addStorkNode() public payable {
+    function addStorkNode() external payable {
         require(msg.value > minStake, "Deposit must be greater than 0");
         require(msg.sender != address(0), "Can't be null address");
 
@@ -66,7 +66,7 @@ contract DataControlContract {
         emit NodeStaked(msg.sender, storkNodes[msg.sender].stakeEndTime);
     }
 
-    function fundStorkNodeStake() public payable {
+    function fundStorkNodeStake() external payable {
         require(msg.value > minStake, "Stake must be greater than 0");
 
         storkNodes[msg.sender].stakeValue += msg.value;
@@ -102,7 +102,7 @@ contract DataControlContract {
     /// @dev Increase the funding of the StorkContract
     /// @param _storkContractAddr a parameter that is used to pass the address of the stork contract
     ///         that is being funded
-    function fundStorkContract(address _storkContractAddr) public payable {
+    function fundStorkContract(address _storkContractAddr) external payable {
         require(msg.value > minStake, "Funds must be greater than 0");
         require(msg.sender != address(0), "Can't be null address");
 
@@ -140,12 +140,12 @@ contract DataControlContract {
 
     // -----------------------------------------------------------------------------------------------------------------
 
-    function changeTxCost(uint256 newCostPerTx) public onlyMultiSigWallet {
+    function changeTxCost(uint256 newCostPerTx) external onlyMultiSigWallet {
         costPerTx = newCostPerTx;
         emit NewCostPerTx(newCostPerTx);
     }
 
-    function changeMinStake(uint256 newMinStake) public onlyMultiSigWallet {
+    function changeMinStake(uint256 newMinStake) external onlyMultiSigWallet {
         minStake = newMinStake;
         emit NewMinStake(newMinStake);
     }
