@@ -115,7 +115,7 @@ contract StorkHandler {
     /// @dev This is so that we don't need to store the data type in this contract as they take a lot of space hence gas
     /// @param _from The address of the contract that created the new StorkDataType
     /// @param _typeId The id of the created StorkDataType
-    /// @param _typeName The id of the created StorkDataType
+    /// @param _typeName The data type name keccak256-ed because that's how events work
     /// @param _data The bytes version of the StorkDataType
     event StorkType(
         address indexed _from,
@@ -126,7 +126,7 @@ contract StorkHandler {
 
     /// @notice Lets StorkNet know that this contract has a new Store request
     /// @param _from The address of the contract that created the new StorkDataType
-    /// @param _typeName The data type name
+    /// @param _typeName The data type name keccak256-ed because that's how events work
     /// @param _data The data being stored
     event StorkStore(
         address indexed _from,
