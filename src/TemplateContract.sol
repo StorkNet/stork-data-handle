@@ -7,14 +7,21 @@ contract DataControlContract {
     function fundStorkContract(address _contractAddr) external payable {}
 }
 
-contract ContractTest {
+contract TemplateContract {
     modifier OnlyOwner() {
         require(msg.sender == owner, "Not owner");
         _;
     }
 
-    address payable public owner;
+    struct Student {
+        string name;
+        uint age;
+        bool isMale;
+    }
 
+    mapping(address => Student) public students;
+
+    address payable public owner;
     DataControlContract public immutable dataControlContract;
 
     constructor(address payable _dataControlAddr) payable {
@@ -26,7 +33,11 @@ contract ContractTest {
         dataControlContract.fundStorkContract{value: msg.value}(address(this));
     }
 
-    function getBalance(address addr) public view returns (uint256) {
+
+
+    function txsLeft(address addr) public view returns (uint256) {
         return addr.balance;
     }
+
+    event StorkStore(address indexed _from, bytes _data);
 }
