@@ -22,22 +22,20 @@ contract DataControlContract {
     /// @custom: amount staked,
     /// @custom: the duration till when the StorkNode is active, after which it can get back it's stake
     /// @custom: the number of transactions handled by the StorkNode
-    /// @custom: Whether or not this storknode is active to handle data requests
+    /// @custom: whether or not this StorkNode is active to handle data requests
 
     struct StorkNode {
         uint256 stakeValue;
         uint256 stakeEndTime;
         uint256 txCount;
-        /// @custom: @shankars99 - Make function to unstakeif the StorkNode misbehaves and remove this bool
         bool isActive;
     }
 
     /// @dev Stores data about the StorkContracts
     /// @custom: number of transactions handled for the StorkContract,
-    /// @custom: the duration till when the StorkContract is active, after which it can get back it's stake
+    /// @custom: whether or not this StorkContract is active for data requests
     struct StorkContract {
-        uint256 txCount;
-        /// @custom: @shankars99 - Try making a function to unstake the stake if requested by the StorkContract
+        uint256 txLeft;
         bool isActive;
     }
 
@@ -140,24 +138,26 @@ contract DataControlContract {
         require(msg.value > minStake, "Funds must be greater than minStake");
 
         // Computes the max number of transactions that can be handled by the Contract
-        storkContracts[msg.sender] = StorkContract(msg.value / costPerTx, true);
-        
+        storkContracts[msg.sender] = StorkContract({
+            txLeft: msg.value / costPerTx,
+            isActive: true
+        });
+
         emit ContractCreated(msg.sender, msg.value / costPerTx);
     }
 
     /// @notice Any user can further fund a StorkContract
-    /// @dev Increase the funding of the StorkContract
-    /// @param _storkContractAddr a parameter that is used to pass the address of the stork contract
-    ///         that is being funded
+    /// @dev Increase the number of transactions of the StorkContract based on the funding
+    /// @param _storkContractAddr address of the stork contract that is being funded
     function fundStorkContract(address _storkContractAddr) external payable {
         require(msg.value > minStake, "Funds must be greater than 0");
         require(msg.sender != address(0), "Can't be null address");
 
-        storkContracts[_storkContractAddr].txCount += msg.value / costPerTx;
+        storkContracts[_storkContractAddr].txLeft += msg.value / costPerTx;
         emit ContractFunded(
             _storkContractAddr,
             msg.value / costPerTx,
-            storkContracts[_storkContractAddr].txCount
+            storkContracts[_storkContractAddr].txLeft
         );
     }
 
@@ -174,13 +174,13 @@ contract DataControlContract {
         bool txBatchingClean = true;
         for (uint256 i = 0; i < _txContractAddrs.length; ++i) {
             if (
-                storkContracts[_txContractAddrs[i]].txCount >
+                storkContracts[_txContractAddrs[i]].txLeft >
                 _txContractCounts[i]
             ) {
                 emit ContractOutOfFund(txId, _txContractAddrs[i]);
                 txBatchingClean = false;
             }
-            storkContracts[_txContractAddrs[i]].txCount -= _txContractCounts[i];
+            storkContracts[_txContractAddrs[i]].txLeft -= _txContractCounts[i];
         }
         emit BatchUpdate(txId, txBatchingClean);
     }
