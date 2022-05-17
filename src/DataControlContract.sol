@@ -19,11 +19,10 @@ contract DataControlContract {
     }
 
     /// @dev Stores data about the StorkNodes
-    /// @custom: amount staked,
+    /// @custom: amount staked
     /// @custom: the duration till when the StorkNode is active, after which it can get back it's stake
     /// @custom: the number of transactions handled by the StorkNode
     /// @custom: whether or not this StorkNode is active to handle data requests
-
     struct StorkNode {
         uint256 stakeValue;
         uint256 stakeEndTime;
@@ -32,7 +31,7 @@ contract DataControlContract {
     }
 
     /// @dev Stores data about the StorkContracts
-    /// @custom: number of transactions handled for the StorkContract,
+    /// @custom: number of transactions handled for the StorkContract
     /// @custom: whether or not this StorkContract is active for data requests
     struct StorkContract {
         uint256 txLeft;
