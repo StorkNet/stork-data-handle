@@ -163,6 +163,13 @@ contract DataControlContract {
         );
     }
 
+    /// @notice Gets pending transactions for a StorkContract
+    /// @param _storkContractAddr Address of the stork contract that is being funded
+    /// @return The number of transactions left for the Contract to consume
+    function txLeftStorkContract(address _storkContractAddr) external view returns(uint256) {
+        return(storkContracts[_storkContractAddr].txLeft);
+    }
+
     /// @notice Batch update of the StorkContracts based on the number of transactions they were involved with
     /// @dev Updates the number of transactions that a StorkContract can handle after this batch update
     /// @param txId The id of the batch Tx
