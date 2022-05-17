@@ -103,15 +103,25 @@ contract DataControlContract {
         require(msg.value > 0, "Stake must be greater than 0");
 
         storkNodes[msg.sender].stakeValue += msg.value;
+
+        // extends duration of the stake by the number of days sent by converting the days to seconds
         storkNodes[msg.sender].stakeEndTime += block.timestamp + _days * 1 days;
 
         emit NodeStakeExtended(msg.sender, storkNodes[msg.sender].stakeEndTime);
     }
 
+    /// @notice Batch update of the StorkNode data based on the number of transactions they handled
+    /// @dev Updates the count of transactions handled by the StorkNode since the last Batch update
+    /// @param _txNodeAddrs an array of all the addresses of the StorkNodes involved in the batch Tx
+    /// @param _txNodeCounts an array of the count of Txs handled by the StorkNodes involved in the batch Tx
     function storkNodeTxBatcher(
         address[] calldata _txNodeAddrs,
         uint256[] calldata _txNodeCounts
     ) external onlyMultiSigWallet {
+        
+        // makes sure the Address array and the Address Tx count arrays are the same length
+        require(_txNodeAddrs.length == _txNodeCounts.length, "Length of arrays must be equal");
+
         for (uint256 i = 0; i < _txNodeAddrs.length; ++i) {
             storkNodes[_txNodeAddrs[i]].txCount += _txNodeCounts[i];
         }
