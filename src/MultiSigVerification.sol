@@ -61,11 +61,6 @@ contract MultiSigVerification {
     DataControlContract public dataControlContract;
     bool dataControlContractSet;
 
-    string public constant nodeTxBatcher =
-        "storkNodeTxBatcher(address[], uint256[])";
-    string public constant contractTxBatcher =
-        "contractTxBatcher(uint256, address[], uint256[])";
-
     modifier onlyValidator() {
         require(isValidator[msg.sender], "not validator");
         _;
