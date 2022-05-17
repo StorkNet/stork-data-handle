@@ -7,7 +7,7 @@ import "./StorkHandler.sol";
 /// @author Shankar "theblushirtdude" Subramanian
 /// @notice Honestly idk what this is for
 /// @dev Explain to a developer any extra details
-contract Test is StorkHandler {
+contract DemoContract is StorkHandler {
     struct Student {
         string name;
         uint256 age;
@@ -27,8 +27,8 @@ contract Test is StorkHandler {
         uint256 _age,
         bool _isMale
     ) public {
-        indexStorkStore(
-            0,
+        storeData(
+            "student",
             abi.encode(Student({name: _name, age: _age, isMale: _isMale}))
         );
     }
@@ -37,7 +37,7 @@ contract Test is StorkHandler {
         Student memory student = abi.decode(_data, (Student));
         student.age++;
 
-        bytesStorkStore(dataTypes[0], abi.encode(student));
+        storeData("student", abi.encode(student));
     }
 
     function decodeStudent(bytes calldata _data)
