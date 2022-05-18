@@ -16,6 +16,7 @@ contract DemoContract is StorkHandler {
 
     constructor(address payable _dataControlAddr) payable {
         setDataControlConractAddr(_dataControlAddr);
+        // also need multi sig addr
         (bool success, ) = dataControlContract.call{value: msg.value}(
             abi.encodeWithSignature("addStorkContract()")
         );
@@ -26,18 +27,28 @@ contract DemoContract is StorkHandler {
         string calldata _name,
         uint256 _age,
         bool _isMale
-    ) public {
-        storeData(
+    ) external {
+        createData(
             "student",
             abi.encode(Student({name: _name, age: _age, isMale: _isMale}))
         );
     }
 
-    function increaseAgeByOne(bytes calldata _data) public {
-        Student memory student = abi.decode(_data, (Student));
+    function increaseAgeByOne(uint32[] memory _storkId) external {
+        requestIdData("student", _storkId, "increaseAgeByOneFallback");
+    }
+
+    function increaseAgeByOneFallback(
+        uint32 _storkId,
+        bytes calldata _storkData
+    ) external {
+        Student memory student = abi.decode(_storkData, (Student));
+
+        // or Student memory student = decodeStudent(_storkData); costs slightly more gas
+
         student.age++;
 
-        storeData("student", abi.encode(student));
+        updateData("student", _storkId, abi.encode(student));
     }
 
     function decodeStudent(bytes calldata _data)
