@@ -3,3 +3,7 @@ image:
 tasks:
   - name: ⚒️ FOUNDRY ⚒️
     command: foundryup
+vscode:
+  extensions:
+    - mhutchie.git-graph
+    - JuanBlanco.solidity
