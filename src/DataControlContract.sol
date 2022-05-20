@@ -48,11 +48,10 @@ contract DataControlContract {
 
     /// @notice Stake duration
     uint256 public constant stakeTime = 4 weeks;
-    
+
     /// @notice The cost per transaction to be paid by the StorkContract
     /// @dev Reduces the amount staked by the StorkContract
     address public immutable multiSigVerifierContract;
-
 
     /// @notice Has the data of all StorkNodes
     /// @dev Maps an address to a StorkNode struct containing the data about the address
@@ -165,8 +164,12 @@ contract DataControlContract {
     /// @notice Gets pending transactions for a StorkContract
     /// @param _storkContractAddr Address of the stork contract that is being funded
     /// @return The number of transactions left for the Contract to consume
-    function txLeftStorkContract(address _storkContractAddr) external view returns(uint256) {
-        return(storkContracts[_storkContractAddr].txLeft);
+    function txLeftStorkContract(address _storkContractAddr)
+        external
+        view
+        returns (uint256)
+    {
+        return (storkContracts[_storkContractAddr].txLeft);
     }
 
     /// @notice Batch update of the StorkContracts based on the number of transactions they were involved with
@@ -179,7 +182,6 @@ contract DataControlContract {
         address[] calldata _txContractAddrs,
         uint256[] calldata _txContractCounts
     ) external onlyMultiSigWallet {
-
         // Probably not needed because of processing on the StorkNet
 
         /// @notice Checks if the batch went smoothly without any contracts involved in errors
@@ -220,6 +222,20 @@ contract DataControlContract {
     function changeMinStake(uint256 _newMinStake) external onlyMultiSigWallet {
         minStake = _newMinStake;
         emit NewMinStake(_newMinStake);
+    }
+
+    /// @notice Returns the minimum stake
+    /// @dev Sets the new minimum stake
+    /// @return minStake
+    function getMinStakeValue() external view returns (uint256) {
+        return (minStake);
+    }
+
+    /// @notice Returns the minimum stake
+    /// @dev Sets the new minimum stake
+    /// @return minStake
+    function getMultiSigAddr() external view returns (address) {
+        return (multiSigVerifierContract);
     }
 
     /// @notice Fallback function to receive funds
@@ -265,7 +281,7 @@ contract DataControlContract {
     /// @param txLeft The fund value of the new StorkContract in terms of Txs
     event ContractCreated(address indexed newContract, uint256 txLeft);
 
-    /// @notice The updated fund value of a StorkContract in terms of Txs left 
+    /// @notice The updated fund value of a StorkContract in terms of Txs left
     /// @dev When the fund value of a StorkContract is increased, increase the Txs Left and emit this event
     /// @param oldContract a parameter just like in doxygen (must be followed by parameter name)
     /// @param txLeft The increase in fund value of the new StorkContract in terms of Txs
