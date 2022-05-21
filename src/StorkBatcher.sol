@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.10;
 
-/// @title StorkNet's OnChain Data Control Client
+/// @title StorkNet's Stork Batching Contract
 /// @author Shankar "theblushirtdude" Subramanian
 /// @notice
 /// @dev This client is used to manage the on-chain data of StorkClients.
