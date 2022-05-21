@@ -55,21 +55,21 @@ contract MultiSigVerification {
         _;
     }
 
-    // struct Tx {
-    //     bytes32 txValidatorCheck;
-    //     address txClientAddress;
-    //     address txMiner;
-    //     address[] txValidatorAddrs;
-    //     uint8[] txNumValidations;
-    //     uint8 txNumClientTransactions;
-    //     uint8 txNumConfirmationsPending;
-    // }
-
     struct Tx {
+        bytes32 txValidatorCheck;
+        address txClientAddress;
         address txMiner;
-        string cid;
+        address[] txValidatorAddrs;
+        uint8[] txNumValidations;
+        uint8 txNumClientTransactions;
         uint8 txNumConfirmationsPending;
     }
+
+    // struct Tx {
+    //     address txMiner;
+    //     string cid;
+    //     uint8 txNumConfirmationsPending;
+    // }
     
     struct BatchTransaction {
         bytes32 batchValidatorCheck;
@@ -206,7 +206,7 @@ contract MultiSigVerification {
 
         storkBatcherContract.txBatching(_txIndex, transactions);
 
-        batchTransactions[_txIndex].isExecuted = true;
+        batchTransactions[_txIndex].hasExecuted = true;
 
         emit ExecuteTransaction(_txIndex, msg.sender);
     }
