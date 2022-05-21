@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.10;
 
-contract DataControlContract {
+contract StorkBatcher {
     function storkNodeTxBatcher(
         address[] calldata _txNodeAddrs,
         uint256[] calldata _txNodeCounts
@@ -64,8 +64,8 @@ contract MultiSigVerification {
 
     uint256 private txCount;
 
-    DataControlContract public dataControlContract;
-    bool public dataControlContractSet;
+    StorkBatcher public storkBatcher;
+    bool public storkBatcherSet;
 
     constructor(
         address[] memory _validators,
@@ -92,8 +92,8 @@ contract MultiSigVerification {
     }
 
     function setDataControlContract(address payable _dataControlAddr) public {
-        require(dataControlContractSet == false, "contract already set");
-        dataControlContract = DataControlContract(_dataControlAddr);
+        require(storkBatcherSet == false, "contract already set");
+        storkBatcher = StorkBatcher(_dataControlAddr);
     }
 
     function submitTransaction(
@@ -169,12 +169,12 @@ contract MultiSigVerification {
 
         Tx memory transactionData = transaction.data;
 
-        dataControlContract.storkNodeTxBatcher(
+        storkBatcher.storkNodeTxBatcher(
             transactionData.txNodeAddrs,
             transactionData.txNodeCounts
         );
 
-        dataControlContract.contractTxBatcher(
+        storkBatcher.contractTxBatcher(
             _txIndex,
             transactionData.txContractAddrs,
             transactionData.txContractCounts
