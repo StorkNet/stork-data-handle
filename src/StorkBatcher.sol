@@ -5,7 +5,7 @@ pragma solidity ^0.8.10;
 /// @author Shankar "theblushirtdude" Subramanian
 /// @notice
 /// @dev This contract is used to manage the on-chain data of StorkContracts.
-contract DataControlContract {
+contract StorkBatcher {
     /// @dev Only validated users can access the function
     modifier OnlyStorkNodes() {
         require(storkNodes[msg.sender].isActive == true, "Not a validator");
