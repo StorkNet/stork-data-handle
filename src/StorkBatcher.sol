@@ -1,20 +1,23 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.10;
 
-/// @title StorkNet's OnChain Data Control Contract
+/// @title StorkNet's OnChain Data Control Client
 /// @author Shankar "theblushirtdude" Subramanian
 /// @notice
-/// @dev This contract is used to manage the on-chain data of StorkClients.
+/// @dev This client is used to manage the on-chain data of StorkClients.
 contract StorkBatcher {
     /// @dev Only validated users can access the function
     modifier OnlyStorkValidators() {
-        require(storkValidators[msg.sender].isActive == true, "Not a validator");
+        require(
+            storkValidators[msg.sender].isActive == true,
+            "Not a validator"
+        );
         _;
     }
 
     /// @dev Only the multi sig wallet can access these functions that update batches so that we lower gas fees
     modifier onlyMultiSigWallet() {
-        require(msg.sender == multiSigVerifierContract, "Not multi sig wallet");
+        require(msg.sender == multiSigVerifierClient, "Not multi sig wallet");
         _;
     }
 
@@ -26,7 +29,7 @@ contract StorkBatcher {
     struct StorkValidator {
         uint256 stakeValue;
         uint256 stakeEndTime;
-        uint32 txCount;
+        uint8 txCount;
         bool isActive;
     }
 
@@ -35,7 +38,7 @@ contract StorkBatcher {
     /// @custom: whether or not this StorkClient is active for data requests
     struct StorkClient {
         uint256 funds;
-        uint32 txLeft;
+        uint8 txLeft;
         bool isActive;
     }
 
@@ -53,7 +56,7 @@ contract StorkBatcher {
 
     /// @notice The cost per transaction to be paid by the StorkClient
     /// @dev Reduces the amount staked by the StorkClient
-    address public immutable multiSigVerifierContract;
+    address public immutable multiSigVerifierClient;
 
     /// @notice Has the data of all StorkValidators
     /// @dev Maps an address to a StorkValidator struct containing the data about the address
@@ -61,26 +64,26 @@ contract StorkBatcher {
 
     /// @notice Has the data of all StorkClients
     /// @dev Maps an address to a StorkClient struct containing the data about the address
-    mapping(address => StorkClient) public storkContracts;
+    mapping(address => StorkClient) public storkClients;
 
-    /// @notice Initializes the contract
-    /// @dev Sets up the contract with minimum stake, cost per tx, and the address of the multi sig verifier
+    /// @notice Initializes the client
+    /// @dev Sets up the client with minimum stake, cost per tx, and the address of the multi sig verifier
     /// @param _minFund The minumum stake required to be a StorkValidator or StorkClient
     /// @param _minStake The minumum stake required to be a StorkValidator or StorkClient
     /// @param _costPerTx The cost per transaction to be paid by the StorkClient
-    /// @param _multiSigVerifierContract The address of the multi sig verifier
+    /// @param _multiSigVerifierClient The address of the multi sig verifier
 
     constructor(
         uint256 _minFund,
         uint256 _minStake,
         uint256 _costPerTx,
-        address _multiSigVerifierContract
+        address _multiSigVerifierClient
     ) {
         minFund = _minFund;
         minStake = _minStake;
-        
+
         costPerTx = _costPerTx;
-        multiSigVerifierContract = _multiSigVerifierContract;
+        multiSigVerifierClient = _multiSigVerifierClient;
     }
 
     /// @notice Allows an address to add themselves as a Validator if they send a transaction greater than the minStake
@@ -99,7 +102,10 @@ contract StorkBatcher {
             isActive: true
         });
 
-        emit ValidatorStaked(msg.sender, storkValidators[msg.sender].stakeEndTime);
+        emit ValidatorStaked(
+            msg.sender,
+            storkValidators[msg.sender].stakeEndTime
+        );
     }
 
     /// @notice Increases the fund of a StorkValidator by the amount sent
@@ -111,9 +117,15 @@ contract StorkBatcher {
         storkValidators[msg.sender].stakeValue += msg.value;
 
         // Extends duration of the stake by the number of days sent by converting the days to seconds
-        storkValidators[msg.sender].stakeEndTime += block.timestamp + _days * 1 days;
+        storkValidators[msg.sender].stakeEndTime +=
+            block.timestamp +
+            _days *
+            1 days;
 
-        emit ValidatorStakeExtended(msg.sender, storkValidators[msg.sender].stakeEndTime);
+        emit ValidatorStakeExtended(
+            msg.sender,
+            storkValidators[msg.sender].stakeEndTime
+        );
     }
 
     /// @notice Batch update of the StorkValidator data based on the number of transactions they handled
@@ -122,7 +134,7 @@ contract StorkBatcher {
     /// @param _txValidatorCounts An array of the count of Txs handled by the StorkValidators involved in the batch Tx
     function storkValidatorTxBatcher(
         address[] calldata _txValidatorAddrs,
-        uint32[] calldata _txValidatorCounts
+        uint8[] calldata _txValidatorCounts
     ) external onlyMultiSigWallet {
         // Makes sure the Address array and the Address Tx count arrays are the same length
         require(
@@ -131,84 +143,83 @@ contract StorkBatcher {
         );
 
         for (uint256 i = 0; i < _txValidatorAddrs.length; ++i) {
-            storkValidators[_txValidatorAddrs[i]].txCount += _txValidatorCounts[i];
+            storkValidators[_txValidatorAddrs[i]].txCount += _txValidatorCounts[
+                i
+            ];
         }
     }
 
     // -----------------------------------------------------------------------------------------------------------------
 
-    /// @notice Allows a Contract to add themselves as a StorkClient if they send a transaction greater than minStake
-    /// @dev Using the Funds received compute the max number of transactions that can be trasacted by the Contract
+    /// @notice Allows a Client to add themselves as a StorkClient if they send a transaction greater than minStake
+    /// @dev Using the Funds received compute the max number of transactions that can be trasacted by the Client
     function addStorkClient() external payable {
         require(msg.value > minFund, "Funds must be greater than minStake");
 
-        // Computes the max number of transactions that can be handled by the Contract
-        storkContracts[msg.sender] = StorkClient({
-            funds : msg.value,
-            txLeft: uint32(msg.value / costPerTx),
+        // Computes the max number of transactions that can be handled by the Client
+        storkClients[msg.sender] = StorkClient({
+            funds: msg.value,
+            txLeft: uint8(msg.value / costPerTx),
             isActive: true
         });
 
-        emit ContractCreated(msg.sender, msg.value / costPerTx);
+        emit ClientCreated(msg.sender, msg.value / costPerTx);
     }
 
     /// @notice Any user can further fund a StorkClient
     /// @dev Increase the number of transactions of the StorkClient based on the funding
-    /// @param _storkContractAddr Address of the stork contract that is being funded
-    function fundStorkClient(address _storkContractAddr) external payable {
+    /// @param _storkClientAddr Address of the stork client that is being funded
+    function fundStorkClient(address _storkClientAddr) external payable {
         require(msg.value > 0, "Funds must be greater than 0");
         require(msg.sender != address(0), "Can't be null address");
 
-        storkContracts[_storkContractAddr].txLeft += uint32(msg.value / costPerTx);
-        storkContracts[_storkContractAddr].funds += msg.value;
-        
-        emit ContractFunded(
-            _storkContractAddr,
+        storkClients[_storkClientAddr].txLeft += uint8(msg.value / costPerTx);
+        storkClients[_storkClientAddr].funds += msg.value;
+
+        emit ClientFunded(
+            _storkClientAddr,
             msg.value / costPerTx,
-            storkContracts[_storkContractAddr].txLeft
+            storkClients[_storkClientAddr].txLeft
         );
     }
 
     /// @notice Gets pending transactions for a StorkClient
-    /// @param _storkContractAddr Address of the stork contract that is being funded
-    /// @return The number of transactions left for the Contract to consume
-    function txLeftStorkClient(address _storkContractAddr)
+    /// @param _storkClientAddr Address of the stork client that is being funded
+    /// @return The number of transactions left for the Client to consume
+    function txLeftStorkClient(address _storkClientAddr)
         external
         view
         returns (uint256)
     {
-        return (storkContracts[_storkContractAddr].txLeft);
+        return (storkClients[_storkClientAddr].txLeft);
     }
 
     /// @notice Batch update of the StorkClients based on the number of transactions they were involved with
     /// @dev Updates the number of transactions that a StorkClient can handle after this batch update
     /// @param txId The id of the batch Tx
-    /// @param _txContractAddrs An array of the StorkClients involved in the batch Tx
-    /// @param _txContractCounts An array of the count of Txs handled for the StorkClients involved in the batch Tx
-    function contractTxBatcher(
-        uint256 txId,
-        address[] calldata _txContractAddrs,
-        uint32[] calldata _txContractCounts
+    /// @param _txClientAddrs An array of the StorkClients involved in the batch Tx
+    /// @param _txClientCounts An array of the count of Txs handled for the StorkClients involved in the batch Tx
+    function clientTxBatcher(
+        uint16 txId,
+        address[] calldata _txClientAddrs,
+        uint8[] calldata _txClientCounts
     ) external onlyMultiSigWallet {
         // Probably not needed because of processing on the StorkNet
 
-        /// @notice Checks if the batch went smoothly without any contracts involved in errors
+        /// @notice Checks if the batch went smoothly without any clients involved in errors
         /// @dev If a StorkClient has run out of Txs, emit a error event stating the same
         bool txBatchingClean = true;
 
-        for (uint256 i = 0; i < _txContractAddrs.length; ++i) {
+        for (uint256 i = 0; i < _txClientAddrs.length; ++i) {
             // Checks if the StorkClient has run out of Txs
-            if (
-                storkContracts[_txContractAddrs[i]].txLeft >
-                _txContractCounts[i]
-            ) {
+            if (storkClients[_txClientAddrs[i]].txLeft > _txClientCounts[i]) {
                 // If it has, emit an event
-                emit ContractOutOfFund(txId, _txContractAddrs[i]);
+                emit ClientOutOfFund(txId, _txClientAddrs[i]);
                 txBatchingClean = false;
             }
 
             // Updates the number of transactions left for the StorkClient
-            storkContracts[_txContractAddrs[i]].txLeft -= _txContractCounts[i];
+            storkClients[_txClientAddrs[i]].txLeft -= _txClientCounts[i];
         }
 
         emit BatchUpdate(txId, txBatchingClean);
@@ -258,7 +269,7 @@ contract StorkBatcher {
     /// @dev Sets the new minimum stake
     /// @return minStake
     function getMultiSigAddr() external view returns (address) {
-        return (multiSigVerifierContract);
+        return (multiSigVerifierClient);
     }
 
     /// @notice Fallback function to receive funds
@@ -270,7 +281,7 @@ contract StorkBatcher {
         emit Deposit(msg.sender, msg.value);
     }
 
-    /// @notice Event for when any ETH is deposited in the contract
+    /// @notice Event for when any ETH is deposited in the client
     /// @dev When a deposit occurs emit this event
     /// @param addr The address depositing the ETH
     /// @param value The value of the deposit
@@ -305,17 +316,17 @@ contract StorkBatcher {
 
     /// @notice The creation of a new StorkClient
     /// @dev When a StorkClient is created, emit this event
-    /// @param newContract The address of the new StorkClient
+    /// @param newClient The address of the new StorkClient
     /// @param txLeft The fund value of the new StorkClient in terms of Txs
-    event ContractCreated(address indexed newContract, uint256 txLeft);
+    event ClientCreated(address indexed newClient, uint256 txLeft);
 
     /// @notice The updated fund value of a StorkClient in terms of Txs left
     /// @dev When the fund value of a StorkClient is increased, increase the Txs Left and emit this event
-    /// @param oldContract a parameter just like in doxygen (must be followed by parameter name)
+    /// @param oldClient a parameter just like in doxygen (must be followed by parameter name)
     /// @param txLeft The increase in fund value of the new StorkClient in terms of Txs
     /// @param newFundTotal The new fund value of the new StorkClient in terms of Txs
-    event ContractFunded(
-        address indexed oldContract,
+    event ClientFunded(
+        address indexed oldClient,
         uint256 txLeft,
         uint256 newFundTotal
     );
@@ -326,12 +337,12 @@ contract StorkBatcher {
     /// @param updateStatus Status updates of true if smooth else false
     event BatchUpdate(uint256 indexed txId, bool indexed updateStatus);
 
-    /// @notice Tells if the contract has run out of funds
-    /// @dev If the contract does not have enough funds to handle more Txs in the current batch update, emit this event
+    /// @notice Tells if the client has run out of funds
+    /// @dev If the client does not have enough funds to handle more Txs in the current batch update, emit this event
     /// @param txId The transaction ID of the batch update
-    /// @param contractOnLowFund The address of the StorkClient that ran out of funds
-    event ContractOutOfFund(
+    /// @param clientOnLowFund The address of the StorkClient that ran out of funds
+    event ClientOutOfFund(
         uint256 indexed txId,
-        address indexed contractOnLowFund
+        address indexed clientOnLowFund
     );
 }

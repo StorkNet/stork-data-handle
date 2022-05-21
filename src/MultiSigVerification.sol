@@ -4,13 +4,13 @@ pragma solidity ^0.8.10;
 contract StorkBatcher {
     function storkValidatorTxBatcher(
         address[] calldata _txValidatorAddrs,
-        uint256[] calldata _txValidatorCounts
+        uint8[] calldata _txValidatorCounts
     ) external {}
 
-    function contractTxBatcher(
-        uint256 txId,
-        address[] calldata _txContractAddrs,
-        uint256[] calldata _txContractCounts
+    function clientTxBatcher(
+        uint16 txId,
+        address[] calldata _txClientAddrs,
+        uint8[] calldata _txClientCounts
     ) external {}
 }
 
@@ -36,20 +36,21 @@ contract MultiSigVerification {
     }
 
     struct Tx {
-        address[] txContractAddrs;
-        uint256[] txContractCounts;
+        address[] txClientAddrs;
         address[] txValidatorAddrs;
-        uint256[] txValidatorCounts;
+        uint8[] txClientCounts;
+        uint8[] txValidatorCounts;
     }
-    
-    struct Transaction {
+
+    struct StorkTransaction {
         bytes32 validatorCheck;
         address[] validators;
-        Tx data;
+        address miner;
+        Tx transaction;
+        uint8 numConfirmations;
+        uint8 maxNumConfirmations;
         bool created;
         bool executed;
-        uint256 numConfirmations;
-        uint256 maxNumConfirmations;
     }
 
     address[] public validators;
@@ -60,9 +61,9 @@ contract MultiSigVerification {
     // mapping from tx index => validator => bool
     mapping(uint256 => mapping(address => bool)) public isConfirmed;
 
-    mapping(uint256 => Transaction) public transactions;
+    mapping(uint256 => StorkTransaction) public transactions;
 
-    uint256 private txCount;
+    uint16 private txCount;
 
     StorkBatcher public storkBatcher;
     bool public storkBatcherSet;
@@ -91,33 +92,35 @@ contract MultiSigVerification {
         minNumConfirmationsRequired = _minNumConfirmationsRequired;
     }
 
-    function setDataControlContract(address payable _dataControlAddr) public {
-        require(storkBatcherSet == false, "contract already set");
+    function setDataControlClient(address payable _dataControlAddr) public {
+        require(storkBatcherSet == false, "client already set");
         storkBatcher = StorkBatcher(_dataControlAddr);
     }
 
     function submitTransaction(
         uint256 _txIndex,
         bytes32 _validatorCheck,
-        address[] calldata txContractAddrs,
-        uint256[] calldata txContractCounts,
-        address[] calldata txValidatorAddrs,
-        uint256[] calldata txValidatorCounts,
-        uint256 _maxNumConfirmations
+        address _miner,
+        address[] calldata _txClientAddrs,
+        address[] calldata _txValidatorAddrs,
+        uint8[] calldata _txClientCounts,
+        uint8[] calldata _txValidatorCounts,
+        uint8 _maxNumConfirmations
     ) public onlyValidator {
         require(transactions[_txIndex].created == false, "tx already exists");
 
         txCount++;
 
-        transactions[_txIndex] = Transaction({
+        transactions[_txIndex] = StorkTransaction({
             validatorCheck: _validatorCheck,
             validators: new address[](0),
-            data: Tx(
-                txContractAddrs,
-                txContractCounts,
-                txValidatorAddrs,
-                txValidatorCounts
-            ),
+            miner: _miner,
+            transaction: Tx({
+                txClientAddrs: _txClientAddrs,
+                txValidatorAddrs: _txValidatorAddrs,
+                txClientCounts: _txClientCounts,
+                txValidatorCounts: _txValidatorCounts
+            }),
             created: true,
             executed: false,
             numConfirmations: 0,
@@ -134,7 +137,7 @@ contract MultiSigVerification {
         notExecuted(_txIndex)
         notConfirmed(_txIndex)
     {
-        Transaction storage transaction = transactions[_txIndex];
+        StorkTransaction storage transaction = transactions[_txIndex];
 
         transaction.validatorCheck ^= keccak256(abi.encodePacked(msg.sender));
         transaction.numConfirmations++;
@@ -148,14 +151,14 @@ contract MultiSigVerification {
         );
     }
 
-    function executeTransaction(uint256 _txIndex)
+    function executeTransaction(uint8 _txIndex)
         public
         payable
         onlyValidator
         txExists(_txIndex)
         notExecuted(_txIndex)
     {
-        Transaction storage transaction = transactions[_txIndex];
+        StorkTransaction storage transaction = transactions[_txIndex];
 
         require(
             transaction.numConfirmations >= minNumConfirmationsRequired,
@@ -167,17 +170,17 @@ contract MultiSigVerification {
             return;
         }
 
-        Tx memory transactionData = transaction.data;
+        Tx memory transactionData = transaction.transaction;
 
         storkBatcher.storkValidatorTxBatcher(
             transactionData.txValidatorAddrs,
             transactionData.txValidatorCounts
         );
 
-        storkBatcher.contractTxBatcher(
+        storkBatcher.clientTxBatcher(
             _txIndex,
-            transactionData.txContractAddrs,
-            transactionData.txContractCounts
+            transactionData.txClientAddrs,
+            transactionData.txClientCounts
         );
 
         transaction.executed = true;
@@ -191,7 +194,7 @@ contract MultiSigVerification {
         txExists(_txIndex)
         notExecuted(_txIndex)
     {
-        Transaction storage transaction = transactions[_txIndex];
+        StorkTransaction storage transaction = transactions[_txIndex];
 
         require(isConfirmed[_txIndex][msg.sender], "tx not confirmed");
 
@@ -213,7 +216,7 @@ contract MultiSigVerification {
     function getTransaction(uint256 _txIndex)
         public
         view
-        returns (Transaction memory)
+        returns (StorkTransaction memory)
     {
         return (transactions[_txIndex]);
     }
