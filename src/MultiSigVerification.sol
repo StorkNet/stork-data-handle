@@ -2,9 +2,9 @@
 pragma solidity ^0.8.10;
 
 contract StorkBatcher {
-    function storkNodeTxBatcher(
-        address[] calldata _txNodeAddrs,
-        uint256[] calldata _txNodeCounts
+    function storkValidatorTxBatcher(
+        address[] calldata _txValidatorAddrs,
+        uint256[] calldata _txValidatorCounts
     ) external {}
 
     function contractTxBatcher(
@@ -38,8 +38,8 @@ contract MultiSigVerification {
     struct Tx {
         address[] txContractAddrs;
         uint256[] txContractCounts;
-        address[] txNodeAddrs;
-        uint256[] txNodeCounts;
+        address[] txValidatorAddrs;
+        uint256[] txValidatorCounts;
     }
     
     struct Transaction {
@@ -101,8 +101,8 @@ contract MultiSigVerification {
         bytes32 _validatorCheck,
         address[] calldata txContractAddrs,
         uint256[] calldata txContractCounts,
-        address[] calldata txNodeAddrs,
-        uint256[] calldata txNodeCounts,
+        address[] calldata txValidatorAddrs,
+        uint256[] calldata txValidatorCounts,
         uint256 _maxNumConfirmations
     ) public onlyValidator {
         require(transactions[_txIndex].created == false, "tx already exists");
@@ -115,8 +115,8 @@ contract MultiSigVerification {
             data: Tx(
                 txContractAddrs,
                 txContractCounts,
-                txNodeAddrs,
-                txNodeCounts
+                txValidatorAddrs,
+                txValidatorCounts
             ),
             created: true,
             executed: false,
@@ -169,9 +169,9 @@ contract MultiSigVerification {
 
         Tx memory transactionData = transaction.data;
 
-        storkBatcher.storkNodeTxBatcher(
-            transactionData.txNodeAddrs,
-            transactionData.txNodeCounts
+        storkBatcher.storkValidatorTxBatcher(
+            transactionData.txValidatorAddrs,
+            transactionData.txValidatorCounts
         );
 
         storkBatcher.contractTxBatcher(
