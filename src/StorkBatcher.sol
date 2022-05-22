@@ -5,9 +5,13 @@ pragma solidity ^0.8.10;
 /// @author Shankar "theblushirtdude" Subramanian
 /// @notice
 /// @dev This client is used to manage the on-chain data of StorkClients.
+contract MultiSigVerification {
+
+}
+
 contract StorkBatcher {
     /// @dev Only validated users can access the function
-    modifier OnlyStorkValidators() {
+    modifier OnlyValidators() {
         require(storkValidators[msg.sender] > 0, "Not a validator");
         _;
     }
@@ -25,6 +29,25 @@ contract StorkBatcher {
         require(msg.sender == multiSigVerifierAddr, "Not multi sig wallet");
         _;
     }
+
+    struct Tx {
+        bool hasFallback;
+        address txMiner;
+        string cid;
+    }
+
+    struct BatchTransaction {
+        address batchMiner;
+        // those that have confirmed
+        address[] batchValidators;
+        // hash of batchindex, batchMiner, txHash
+        bytes32 batchHash;
+        // Tx array becomes keccak256(abi.encodePacked()) gets hashed keccak256(abi.encodePacked())
+        bytes32 txHash;
+        uint8 batchConfirmationsRequired; // 0 not create, 1 validated, >1 not fully confirmed
+        bool isBatchExecuted;
+    }
+
     /// @notice The cost per transaction to be paid by the StorkClient
     /// @dev Reduces the amount staked by the StorkClient
     address public immutable multiSigVerifierAddr;
@@ -45,6 +68,10 @@ contract StorkBatcher {
     /// @dev Maps an address to a StorkClient struct containing the data about the address
     mapping(address => uint256) public storkClients;
 
+    /// @notice Has the data of all StorkClients
+    /// @dev Maps an address to a StorkClient struct containing the data about the address
+    mapping(uint256 => BatchTransaction) public Txs;
+
     /// @notice Initializes the client
     /// @dev Sets up the client with minimum stake, cost per tx, and the address of the multi sig verifier
     /// @param _multiSigVerifierAddr The minumum stake required to be a StorkValidator or StorkClient
@@ -60,7 +87,38 @@ contract StorkBatcher {
         storkFundAddr = _storkFundAddr;
     }
 
+    function submitTransaction(
+        uint256 _txIndex,
+        address _batchMiner,
+        Tx[] calldata _transactions,
+        uint8 _batchNumConfirmationsPending
+    ) public OnlyValidators {
+        require(
+            Txs[_txIndex].batchConfirmationsRequired > 0,
+            "tx already exists"
+        );
+        bytes32 txHashed = keccak256(abi.encode(_transactions));
+        bytes32 batchHash = keccak256(
+            abi.encodePacked(_txIndex, _batchMiner, txHashed)
+        );
 
+        Txs[_txIndex] = BatchTransaction(
+            _batchMiner,
+            new address[](0),
+            batchHash,
+            txHashed,
+            _batchNumConfirmationsPending,
+            false
+        );
+
+        emit TransactionSubmitted(_txIndex, msg.sender, batchHash);
+    }
+
+    event TransactionSubmitted(
+        uint256 indexed _txIndex,
+        address indexed _submitter,
+        bytes32 indexed _txKeccaked
+    );
 
     /// @notice Allows an address to add themselves as a Validator if they send a transaction greater than the minStake
     /// @dev If the Tx has enough funds to be a Validator, add them to the storkValidators mapping

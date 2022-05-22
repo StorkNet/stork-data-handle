@@ -1,18 +1,14 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.10;
 
-contract StorkBatcher {
-    struct Tx {
-        bytes32 txValidatorCheck;
-        address txClientAddress;
-        address txMiner;
-        address[] txValidatorAddrs;
-        uint8[] txNumValidations;
-        uint8 txNumClientTransactions;
-        uint8 txNumConfirmationsPending;
-    }
+contract StorkBatcher {}
 
-    function txBatching(uint16 txId, Tx[] memory transactions) external {}
+contract StorkStake {
+    function isValidator(address _address) external view returns (bool) {}
+}
+
+contract StorkFund {
+    function changeTxCost(uint256 _newCostPerTx) external {}
 }
 
 /// @title StorkNet's OnChain Data Control Client
@@ -20,32 +16,28 @@ contract StorkBatcher {
 /// @notice
 /// @dev This contract is used to validate the StorkTxs
 contract MultiSigVerification {
-    modifier onlyValidator() {
-        require(isValidator[msg.sender], "not validator");
+    modifier onlyValidators() {
+        require(storkStake.isValidator(msg.sender) == true, "Not a validator");
         _;
     }
-
-    modifier txExists(uint256 _txIndex) {
+    modifier OnlyStorkStake() {
         require(
-            batchTransactions[_txIndex].isBatchCreated,
-            "tx does not exist"
+            msg.sender == storkStakeContract.contractAddress,
+            "Not the storkStakeAddr"
         );
         _;
     }
-
-    modifier txNotExecuted(uint256 _txIndex) {
+    modifier OnlyStorkFund() {
         require(
-            !batchTransactions[_txIndex].isBatchExecuted,
-            "tx already executed"
+            msg.sender == storkFundContract.contractAddress,
+            "Not the storkStakeAddr"
         );
         _;
     }
-
-    modifier txConfirmed(uint256 _txIndex, bool _isConfirmed) {
+    modifier onlyBatcher() {
         require(
-            (batchTransactions[_txIndex].batchNumConfirmationsPending == 0) ==
-                _isConfirmed,
-            "tx already confirmed"
+            msg.sender == storkBatcherContract.contractAddress,
+            "Not multi sig wallet"
         );
         _;
     }
@@ -56,31 +48,25 @@ contract MultiSigVerification {
     }
 
     struct Tx {
-        bytes32 txValidatorCheck;
-        address txClientAddress;
+        bool hasFallback;
         address txMiner;
-        address[] txValidatorAddrs;
-        uint8[] txNumValidations;
-        uint8 txNumClientTransactions;
-        uint8 txNumConfirmationsPending;
+        string cid;
     }
 
-    // struct Tx {
-    //     address txMiner;
-    //     string cid;
-    //     uint8 txNumConfirmationsPending;
-    // }
-    
     struct BatchTransaction {
-        bytes32 batchValidatorCheck;
-        address[] batchValidators;
         address batchMiner;
-        Tx[] transactions;
-        uint8 batchNumConfirmationsPending;
-        bool isBatchCreated;
+        // hash of batchindex, batchMiner, txHash
+        bytes32 batchHash;
+        // Tx array becomes keccak256(abi.encodePacked()) gets hashed keccak256(abi.encodePacked())
+        bytes32 txHash;
+        uint8 batchConfirmationsRequired; // 0 not create, 1 validated, >1 not fully confirmed
         bool isBatchExecuted;
     }
 
+    struct Contract {
+        address contractAddress;
+        bool isSet;
+    }
     /// @notice List of StorkValidators
     /// @dev All approved StorkValidators are listed here
     address[] public validators;
@@ -97,157 +83,189 @@ contract MultiSigVerification {
 
     mapping(uint256 => BatchTransaction) public batchTransactions;
 
-    uint16 private txCount;
+    /// @notice The cost per transaction to be paid by the StorkClient
+    /// @dev Reduces the amount staked by the StorkClient
+    Contract public storkBatcherContract;
+    StorkBatcher public storkBatcher;
 
-    StorkBatcher public storkBatcherContract;
+    /// @notice The cost per transaction to be paid by the StorkClient
+    /// @dev Reduces the amount staked by the StorkClient
+    Contract public storkStakeContract;
+    StorkStake public storkStake;
 
-    bool public isStorkBatcherContractSet;
+    /// @notice The cost per transaction to be paid by the StorkClient
+    /// @dev Reduces the amount staked by the StorkClient
+    Contract public storkFundContract;
+    StorkFund public storkFund;
 
-    constructor(
-        address[] memory _validators,
-        uint256 _minNumConfirmationsRequired
-    ) {
-        require(_validators.length > 0, "validators required");
-        require(
-            _minNumConfirmationsRequired > 0 &&
-                _minNumConfirmationsRequired <= _validators.length,
-            "invalid number of required confirmations"
-        );
-
-        for (uint256 i = 0; i < _validators.length; i++) {
-            address validator = _validators[i];
-
-            require(validator != address(0), "invalid validator");
-            require(!isValidator[validator], "validator not unique");
-
-            isValidator[validator] = true;
-            validators.push(validator);
-        }
-
-        minNumConfirmationsRequired = _minNumConfirmationsRequired;
-    }
+    constructor() {}
 
     function setStorkBatcherContract(address payable _storkBatcher) public {
-        require(!isStorkBatcherContractSet, "client already set");
-        storkBatcherContract = StorkBatcher(_storkBatcher);
+        require(!storkBatcherContract.isSet, "client already set");
+        storkBatcherContract.contractAddress = _storkBatcher;
+        storkBatcher = StorkBatcher(_storkBatcher);
+    }
+
+    function setStorkStakeContract(address payable _storkStake) public {
+        require(!storkStakeContract.isSet, "stake contract already set");
+        storkStakeContract.contractAddress = _storkStake;
+        storkStake = StorkStake(_storkStake);
+    }
+
+    function setStorkFundContract(address payable _storkFund) public {
+        require(!storkFundContract.isSet, "fund contract already set");
+        storkFundContract.contractAddress = _storkFund;
+        storkFund = StorkFund(_storkFund);
     }
 
     function submitTransaction(
-        uint256 _txIndex,
-        bytes32 _batchValidatorCheck,
-        address[] calldata _batchValidators,
-        address _batchMiner,
-        Tx[] calldata _transactions,
-        uint8 _batchNumConfirmationsPending,
-        bool _isBatchCreated,
-        bool _isBatchExecuted
-    ) public onlyValidator {
+        uint256 _batchIndex,
+        address _minerAddr,
+        bytes32 _batchHash,
+        bytes32[] calldata _txHash,
+        uint8 _batchConfirmationsRequired
+    ) public onlyValidators validatorNotConfirmed(_batchIndex) {
         require(
-            batchTransactions[_txIndex].isBatchCreated == false,
+            batchTransactions[_batchIndex].batchConfirmationsRequired == 0,
             "tx already exists"
         );
 
-        txCount++;
+        bytes32 txHashed = keccak256(abi.encodePacked(_txHash));
 
-        batchTransactions[_txIndex] = BatchTransaction({
-            batchValidatorCheck: _batchValidatorCheck,
-            batchValidators: _batchValidators,
-            batchMiner: _batchMiner,
-            transactions: _transactions,
-            batchNumConfirmationsPending: _batchNumConfirmationsPending,
-            isBatchCreated: _isBatchCreated,
-            isBatchExecuted: _isBatchExecuted
-        });
-
-        emit SubmitTransaction(_txIndex, msg.sender);
-    }
-
-    function confirmTransaction(uint256 _txIndex)
-        public
-        onlyValidator
-        txConfirmed(_txIndex, false)
-        txNotExecuted(_txIndex)
-        txExists(_txIndex)
-        validatorNotConfirmed(_txIndex)
-    {
-        BatchTransaction storage transaction = batchTransactions[_txIndex];
-
-        // keccack256 converts the input to bytes32 constant size
-        transaction.batchValidatorCheck ^= keccak256(
-            abi.encodePacked(msg.sender)
-        );
-        transaction.batchNumConfirmationsPending--;
-        transaction.batchValidators.push(msg.sender);
-        isConfirmed[_txIndex][msg.sender] = true;
-
-        emit ConfirmTransaction(
-            _txIndex,
-            msg.sender,
-            transaction.batchNumConfirmationsPending
-        );
-    }
-
-    function executeTransaction(uint8 _txIndex)
-        public
-        payable
-        onlyValidator
-        txConfirmed(_txIndex, true)
-        txExists(_txIndex)
-        txNotExecuted(_txIndex)
-    {
-        BatchTransaction memory transaction = batchTransactions[_txIndex];
-
-        if (transaction.batchValidatorCheck != bytes32(0)) {
-            emit InvalidValidators(_txIndex);
-            return;
+        if (msg.sender == storkBatcherContract.contractAddress) {
+            if (batchTransactions[_batchIndex].batchConfirmationsRequired > 0) {
+                batchTransactions[_batchIndex].batchMiner = _minerAddr;
+                isConfirmed[_batchIndex][msg.sender] = true;
+                batchTransactions[_batchIndex].batchConfirmationsRequired--;
+            } else {
+                createNewTransaction(
+                    _batchIndex,
+                    msg.sender,
+                    _batchHash,
+                    txHashed,
+                    _batchConfirmationsRequired
+                );
+            }
+        } else {
+            if (batchTransactions[_batchIndex].batchConfirmationsRequired > 0) {
+                isConfirmed[_batchIndex][msg.sender] = true;
+                batchTransactions[_batchIndex].batchConfirmationsRequired--;
+            } else {
+                createNewTransaction(
+                    _batchIndex,
+                    address(0),
+                    _batchHash,
+                    txHashed,
+                    _batchConfirmationsRequired
+                );
+            }
         }
 
-        Tx[] memory transactions = transaction.transactions;
-
-        storkBatcherContract.txBatching(_txIndex, transactions);
-
-        batchTransactions[_txIndex].hasExecuted = true;
-
-        emit ExecuteTransaction(_txIndex, msg.sender);
+        emit SubmitTransaction(_batchIndex, msg.sender);
     }
 
-    function revokeConfirmation(uint256 _txIndex)
-        public
-        onlyValidator
-        txExists(_txIndex)
-        txNotExecuted(_txIndex)
-    {
-        BatchTransaction memory transaction = batchTransactions[_txIndex];
-
-        require(isConfirmed[_txIndex][msg.sender], "tx not confirmed");
-
-        transaction.numConfirmations--;
-        transaction.validatorCheck ^= keccak256(abi.encodePacked(msg.sender));
-        isConfirmed[_txIndex][msg.sender] = false;
-
-        batchTransactions[_txIndex] = transaction;
-        emit RevokeConfirmation(_txIndex, msg.sender);
+    function createNewTransaction(
+        uint256 _batchIndex,
+        address _minerAddr,
+        bytes32 _batchHash,
+        bytes32 _txHash,
+        uint8 _batchConfirmationsRequired
+    ) internal {
+        batchTransactions[_batchIndex] = BatchTransaction({
+            batchMiner: _minerAddr,
+            batchHash: _batchHash,
+            txHash: _txHash,
+            batchConfirmationsRequired: _batchConfirmationsRequired,
+            isBatchExecuted: false
+        });
     }
 
-    function getValidators() public view returns (address[] memory) {
-        return validators;
-    }
+    // function confirmTransaction(uint256 _txIndex)
+    //     public
+    //     onlyValidator
+    //     txConfirmed(_txIndex, false)
+    //     txNotExecuted(_txIndex)
+    //     txExists(_txIndex)
+    //     validatorNotConfirmed(_txIndex)
+    // {
+    //     BatchTransaction storage transaction = batchTransactions[_txIndex];
 
-    function getTransactionCount() public view returns (uint256) {
-        return txCount;
-    }
+    //     // keccack256 converts the input to bytes32 constant size
+    //     transaction.batchValidatorCheck ^= keccak256(
+    //         abi.encodePacked(msg.sender)
+    //     );
+    //     transaction.batchNumConfirmationsPending--;
+    //     transaction.batchValidators.push(msg.sender);
+    //     isConfirmed[_txIndex][msg.sender] = true;
 
-    function getTransaction(uint256 _txIndex)
-        public
-        view
-        returns (BatchTransaction memory)
-    {
-        return (batchTransactions[_txIndex]);
-    }
+    //     emit ConfirmTransaction(
+    //         _txIndex,
+    //         msg.sender,
+    //         transaction.batchNumConfirmationsPending
+    //     );
+    // }
 
-    function getMinerOfTx(uint256 _txIndex) public view returns (address) {
-        return (batchTransactions[_txIndex].miner);
-    }
+    // function executeTransaction(uint8 _txIndex)
+    //     public
+    //     payable
+    //     onlyValidator
+    //     txConfirmed(_txIndex, true)
+    //     txExists(_txIndex)
+    //     txNotExecuted(_txIndex)
+    // {
+    //     BatchTransaction memory transaction = batchTransactions[_txIndex];
+
+    //     if (transaction.batchValidatorCheck != bytes32(0)) {
+    //         emit InvalidValidators(_txIndex);
+    //         return;
+    //     }
+
+    //     Tx[] memory transactions = transaction.transactions;
+
+    //     storkBatcherContract.txBatching(_txIndex, transactions);
+
+    //     batchTransactions[_txIndex].isExecuted = true;
+
+    //     emit ExecuteTransaction(_txIndex, msg.sender);
+    // }
+
+    // function revokeConfirmation(uint256 _txIndex)
+    //     public
+    //     onlyValidator
+    //     txExists(_txIndex)
+    //     txNotExecuted(_txIndex)
+    // {
+    //     BatchTransaction memory transaction = batchTransactions[_txIndex];
+
+    //     require(isConfirmed[_txIndex][msg.sender], "tx not confirmed");
+
+    //     transaction.numConfirmations--;
+    //     transaction.validatorCheck ^= keccak256(abi.encodePacked(msg.sender));
+    //     isConfirmed[_txIndex][msg.sender] = false;
+
+    //     batchTransactions[_txIndex] = transaction;
+    //     emit RevokeConfirmation(_txIndex, msg.sender);
+    // }
+
+    // function getValidators() public view returns (address[] memory) {
+    //     return validators;
+    // }
+
+    // function getTransactionCount() public view returns (uint256) {
+    //     return txCount;
+    // }
+
+    // function getTransaction(uint256 _txIndex)
+    //     public
+    //     view
+    //     returns (BatchTransaction memory)
+    // {
+    //     return (batchTransactions[_txIndex]);
+    // }
+
+    // function getMinerOfTx(uint256 _txIndex) public view returns (address) {
+    //     return (batchTransactions[_txIndex].miner);
+    // }
 
     event SubmitTransaction(uint256 indexed txIndex, address indexed validator);
     event ConfirmTransaction(
