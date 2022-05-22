@@ -8,179 +8,73 @@ pragma solidity ^0.8.10;
 contract StorkBatcher {
     /// @dev Only validated users can access the function
     modifier OnlyStorkValidators() {
-        require(
-            storkValidators[msg.sender].isActive == true,
-            "Not a validator"
-        );
+        require(storkValidators[msg.sender] > 0, "Not a validator");
         _;
     }
-
+    /// @dev Only validated users can access the function
+    modifier OnlyStorkStake() {
+        require(msg.sender == storkStakeAddr, "Not the storkStakeAddr");
+        _;
+    } /// @dev Only validated users can access the function
+    modifier OnlyStorkFund() {
+        require(msg.sender == storkFundAddr, "Not the storkStakeAddr");
+        _;
+    }
     /// @dev Only the multi sig wallet can access these functions that update batches so that we lower gas fees
     modifier onlyMultiSigWallet() {
-        require(msg.sender == multiSigVerifierClient, "Not multi sig wallet");
+        require(msg.sender == multiSigVerifierAddr, "Not multi sig wallet");
         _;
     }
-
-    /// @dev Stores data about the StorkValidators
-    /// @custom: amount staked
-    /// @custom: the duration till when the StorkValidator is active, after which it can get back it's stake
-    /// @custom: the number of transactions handled by the StorkValidator
-    /// @custom: whether or not this StorkValidator is active to handle data requests
-    struct StorkValidator {
-        uint256 stakeValue;
-        uint256 stakeEndTime;
-        uint8 txCount;
-        bool isActive;
-    }
-
-    /// @dev Stores data about the StorkClients
-    /// @custom: number of transactions handled for the StorkClient
-    /// @custom: whether or not this StorkClient is active for data requests
-    struct StorkClient {
-        uint256 funds;
-        uint8 txLeft;
-        bool isActive;
-    }
-
-    /// @notice The minimum stake required to be a StorkValidator or StorkClient
-    /// @dev The stake is used to validate Validators and also to compensate/pay Validators for transactions they handle
-    uint256 public minFund;
-    uint256 public minStake;
+    /// @notice The cost per transaction to be paid by the StorkClient
+    /// @dev Reduces the amount staked by the StorkClient
+    address public immutable multiSigVerifierAddr;
 
     /// @notice The cost per transaction to be paid by the StorkClient
     /// @dev Reduces the amount staked by the StorkClient
-    uint256 public costPerTx;
-
-    /// @notice Stake duration
-    uint256 public constant stakeTime = 4 weeks;
+    address public immutable storkStakeAddr;
 
     /// @notice The cost per transaction to be paid by the StorkClient
     /// @dev Reduces the amount staked by the StorkClient
-    address public immutable multiSigVerifierClient;
+    address public immutable storkFundAddr;
 
     /// @notice Has the data of all StorkValidators
     /// @dev Maps an address to a StorkValidator struct containing the data about the address
-    mapping(address => StorkValidator) public storkValidators;
+    mapping(address => uint256) public storkValidators;
 
     /// @notice Has the data of all StorkClients
     /// @dev Maps an address to a StorkClient struct containing the data about the address
-    mapping(address => StorkClient) public storkClients;
+    mapping(address => uint256) public storkClients;
 
     /// @notice Initializes the client
     /// @dev Sets up the client with minimum stake, cost per tx, and the address of the multi sig verifier
-    /// @param _minFund The minumum stake required to be a StorkValidator or StorkClient
-    /// @param _minStake The minumum stake required to be a StorkValidator or StorkClient
-    /// @param _costPerTx The cost per transaction to be paid by the StorkClient
-    /// @param _multiSigVerifierClient The address of the multi sig verifier
-
+    /// @param _multiSigVerifierAddr The minumum stake required to be a StorkValidator or StorkClient
+    /// @param _storkStakeAddr The minumum stake required to be a StorkValidator or StorkClient
+    /// @param _storkFundAddr The cost per transaction to be paid by the StorkClient
     constructor(
-        uint256 _minFund,
-        uint256 _minStake,
-        uint256 _costPerTx,
-        address _multiSigVerifierClient
+        address _multiSigVerifierAddr,
+        address _storkStakeAddr,
+        address _storkFundAddr
     ) {
-        minFund = _minFund;
-        minStake = _minStake;
+        multiSigVerifierAddr = _multiSigVerifierAddr;
+        storkStakeAddr = _storkStakeAddr;
+        storkFundAddr = _storkFundAddr;
+    }
 
-        costPerTx = _costPerTx;
-        multiSigVerifierClient = _multiSigVerifierClient;
+
+
+    /// @notice Allows an address to add themselves as a Validator if they send a transaction greater than the minStake
+    /// @dev If the Tx has enough funds to be a Validator, add them to the storkValidators mapping
+    function addStorkValidator(address _validator) external OnlyStorkStake {
+        storkValidators[_validator] = 1;
     }
 
     /// @notice Allows an address to add themselves as a Validator if they send a transaction greater than the minStake
     /// @dev If the Tx has enough funds to be a Validator, add them to the storkValidators mapping
-    function addStorkValidator() external payable {
-        require(
-            msg.value > minStake,
-            "Deposit must be greater than the minStake"
-        );
-        require(msg.sender != address(0), "Can't be null address");
-
-        storkValidators[msg.sender] = StorkValidator({
-            stakeValue: msg.value,
-            stakeEndTime: block.timestamp + stakeTime, //gets the end time of the stake
-            txCount: 0,
-            isActive: true
-        });
-
-        emit ValidatorStaked(
-            msg.sender,
-            storkValidators[msg.sender].stakeEndTime
-        );
-    }
-
-    /// @notice Increases the fund of a StorkValidator by the amount sent
-    /// @dev Increases the fund of a Validator by the amount sent and also the duration of the stake
-    /// @param _days Increases the duration of the stake by the number of days sent
-    function fundStorkValidatorStake(uint256 _days) external payable {
-        require(msg.value > 0, "Stake must be greater than 0");
-
-        storkValidators[msg.sender].stakeValue += msg.value;
-
-        // Extends duration of the stake by the number of days sent by converting the days to seconds
-        storkValidators[msg.sender].stakeEndTime +=
-            block.timestamp +
-            _days *
-            1 days;
-
-        emit ValidatorStakeExtended(
-            msg.sender,
-            storkValidators[msg.sender].stakeEndTime
-        );
-    }
-
-    /// @notice Batch update of the StorkValidator data based on the number of transactions they handled
-    /// @dev Updates the count of transactions handled by the StorkValidator since the last Batch update
-    /// @param _txValidatorAddrs An array of all the addresses of the StorkValidators involved in the batch Tx
-    /// @param _txValidatorCounts An array of the count of Txs handled by the StorkValidators involved in the batch Tx
-    function storkValidatorTxBatcher(
-        address[] calldata _txValidatorAddrs,
-        uint8[] calldata _txValidatorCounts
-    ) external onlyMultiSigWallet {
-        // Makes sure the Address array and the Address Tx count arrays are the same length
-        require(
-            _txValidatorAddrs.length == _txValidatorCounts.length,
-            "Length of arrays must be equal"
-        );
-
-        for (uint256 i = 0; i < _txValidatorAddrs.length; ++i) {
-            storkValidators[_txValidatorAddrs[i]].txCount += _txValidatorCounts[
-                i
-            ];
-        }
-    }
-
-    // -----------------------------------------------------------------------------------------------------------------
-
-    /// @notice Allows a Client to add themselves as a StorkClient if they send a transaction greater than minStake
-    /// @dev Using the Funds received compute the max number of transactions that can be trasacted by the Client
-    function addStorkClient() external payable {
-        require(msg.value > minFund, "Funds must be greater than minStake");
-
-        // Computes the max number of transactions that can be handled by the Client
-        storkClients[msg.sender] = StorkClient({
-            funds: msg.value,
-            txLeft: uint8(msg.value / costPerTx),
-            isActive: true
-        });
-
-        emit ClientCreated(msg.sender, msg.value / costPerTx);
-    }
-
-    /// @notice Any user can further fund a StorkClient
-    /// @dev Increase the number of transactions of the StorkClient based on the funding
-    /// @param _storkClientAddr Address of the stork client that is being funded
-    function fundStorkClient(address _storkClientAddr) external payable {
-        require(msg.value > 0, "Funds must be greater than 0");
-        require(msg.sender != address(0), "Can't be null address");
-
-        storkClients[_storkClientAddr].txLeft += uint8(msg.value / costPerTx);
-        storkClients[_storkClientAddr].funds += msg.value;
-
-        emit ClientFunded(
-            _storkClientAddr,
-            msg.value / costPerTx,
-            storkClients[_storkClientAddr].txLeft
-        );
+    function addStorkClient(address _contract, uint256 txs)
+        external
+        OnlyStorkFund
+    {
+        storkClients[_contract] = txs;
     }
 
     /// @notice Gets pending transactions for a StorkClient
@@ -191,85 +85,14 @@ contract StorkBatcher {
         view
         returns (uint256)
     {
-        return (storkClients[_storkClientAddr].txLeft);
-    }
-
-    /// @notice Batch update of the StorkClients based on the number of transactions they were involved with
-    /// @dev Updates the number of transactions that a StorkClient can handle after this batch update
-    /// @param txId The id of the batch Tx
-    /// @param _txClientAddrs An array of the StorkClients involved in the batch Tx
-    /// @param _txClientCounts An array of the count of Txs handled for the StorkClients involved in the batch Tx
-    function clientTxBatcher(
-        uint16 txId,
-        address[] calldata _txClientAddrs,
-        uint8[] calldata _txClientCounts
-    ) external onlyMultiSigWallet {
-        // Probably not needed because of processing on the StorkNet
-
-        /// @notice Checks if the batch went smoothly without any clients involved in errors
-        /// @dev If a StorkClient has run out of Txs, emit a error event stating the same
-        bool txBatchingClean = true;
-
-        for (uint256 i = 0; i < _txClientAddrs.length; ++i) {
-            // Checks if the StorkClient has run out of Txs
-            if (storkClients[_txClientAddrs[i]].txLeft > _txClientCounts[i]) {
-                // If it has, emit an event
-                emit ClientOutOfFund(txId, _txClientAddrs[i]);
-                txBatchingClean = false;
-            }
-
-            // Updates the number of transactions left for the StorkClient
-            storkClients[_txClientAddrs[i]].txLeft -= _txClientCounts[i];
-        }
-
-        emit BatchUpdate(txId, txBatchingClean);
-    }
-
-    // -----------------------------------------------------------------------------------------------------------------
-
-    /// @notice Changes the minimum transaction cost for a StorkClient
-    /// @dev Sets the new costPerTx
-    /// @param _newCostPerTx The new costPerTx
-    function changeTxCost(uint256 _newCostPerTx) external onlyMultiSigWallet {
-        costPerTx = _newCostPerTx;
-        emit NewCostPerTx(_newCostPerTx);
-    }
-
-    /// @notice Changes the minimum stake for a StorkClient or StorkValidator
-    /// @dev Sets the new minimum stake
-    /// @param _newMinStake The new minimum stake
-    function changeMinStake(uint256 _newMinStake) external onlyMultiSigWallet {
-        minStake = _newMinStake;
-        emit NewMinStake(_newMinStake);
-    }
-
-    /// @notice Changes the minimum stake for a StorkClient or StorkValidator
-    /// @dev Sets the new minimum stake
-    /// @param _newMinFund The new minimum stake
-    function changeMinFund(uint256 _newMinFund) external onlyMultiSigWallet {
-        minFund = _newMinFund;
-        emit NewMinFund(_newMinFund);
-    }
-
-    /// @notice Returns the minimum stake
-    /// @dev Sets the new minimum stake
-    /// @return minStake
-    function getMinStakeValue() external view returns (uint256) {
-        return (minStake);
-    }
-
-    /// @notice Returns the minimum stake
-    /// @dev Sets the new minimum stake
-    /// @return minStake
-    function getMinFundValue() external view returns (uint256) {
-        return (minFund);
+        return (storkClients[_storkClientAddr]);
     }
 
     /// @notice Returns the minimum stake
     /// @dev Sets the new minimum stake
     /// @return minStake
     function getMultiSigAddr() external view returns (address) {
-        return (multiSigVerifierClient);
+        return (multiSigVerifierAddr);
     }
 
     /// @notice Fallback function to receive funds
