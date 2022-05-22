@@ -259,26 +259,6 @@ contract MultiSigVerification {
     //     emit RevokeConfirmation(_txIndex, msg.sender);
     // }
 
-    // function getValidators() public view returns (address[] memory) {
-    //     return validators;
-    // }
-
-    // function getTransactionCount() public view returns (uint256) {
-    //     return txCount;
-    // }
-
-    // function getTransaction(uint256 _txIndex)
-    //     public
-    //     view
-    //     returns (BatchTransaction memory)
-    // {
-    //     return (batchTransactions[_txIndex]);
-    // }
-
-    // function getMinerOfTx(uint256 _txIndex) public view returns (address) {
-    //     return (batchTransactions[_txIndex].miner);
-    // }
-
     event SubmitTransaction(uint256 indexed txIndex, address indexed validator);
     event ConfirmTransaction(
         uint256 indexed txIndex,
