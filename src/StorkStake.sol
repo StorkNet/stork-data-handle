@@ -111,6 +111,10 @@ contract StorkStake {
         return (minStake);
     }
 
+    function isValidator(address _address) external view returns (bool) {
+        return storkValidators[_address].isActive;
+    }
+
     /// @notice Fallback function to receive funds
     fallback() external payable {}
 
