@@ -6,7 +6,14 @@ pragma solidity ^0.8.10;
 /// @notice
 /// @dev This client is used to manage the on-chain data of StorkClients.
 contract MultiSigVerification {
-
+    function submitTransaction(
+        uint256 _batchIndex,
+        address _minerAddr,
+        bytes32 _batchHash,
+        bytes32[] calldata _txHash,
+        uint8 _batchConfirmationsRequired,
+        string calldata _cid
+    ) external {}
 }
 
 contract StorkBatcher {
@@ -45,13 +52,14 @@ contract StorkBatcher {
         // Tx array becomes keccak256(abi.encodePacked()) gets hashed keccak256(abi.encodePacked())
         bytes32 txHash;
         uint8 batchConfirmationsRequired; // 0 not create, 1 validated, >1 not fully confirmed
+        string batchCid;
         bool isBatchExecuted;
     }
 
     /// @notice The cost per transaction to be paid by the StorkClient
     /// @dev Reduces the amount staked by the StorkClient
+    MultiSigVerification public immutable multiSigVerifier;
     address public immutable multiSigVerifierAddr;
-
     /// @notice The cost per transaction to be paid by the StorkClient
     /// @dev Reduces the amount staked by the StorkClient
     address public immutable storkStakeAddr;
@@ -82,25 +90,27 @@ contract StorkBatcher {
         address _storkStakeAddr,
         address _storkFundAddr
     ) {
+        multiSigVerifier = MultiSigVerification(_multiSigVerifierAddr);
         multiSigVerifierAddr = _multiSigVerifierAddr;
         storkStakeAddr = _storkStakeAddr;
         storkFundAddr = _storkFundAddr;
     }
 
     function submitTransaction(
-        uint256 _txIndex,
+        uint256 _batchIndex,
         address _batchMiner,
         bytes32 _batchHash,
-        Tx[] calldata _transactions,
-        uint8 _batchNumConfirmationsPending
+        bytes32[] calldata _txHash,
+        uint8 _batchNumConfirmationsPending,
+        string calldata _cid
     ) public OnlyValidators {
         require(
-            Txs[_txIndex].batchConfirmationsRequired > 0,
+            Txs[_batchIndex].batchConfirmationsRequired > 0,
             "tx already exists"
         );
-        bytes32 txHashed = keccak256(abi.encode(_transactions));
+        bytes32 txHashed = keccak256(abi.encodePacked(_txHash));
         bytes32 batchHash = keccak256(
-            abi.encodePacked(_txIndex, _batchMiner, txHashed)
+            abi.encodePacked(_batchIndex, _batchMiner, txHashed, _cid)
         );
 
         require(
@@ -108,16 +118,24 @@ contract StorkBatcher {
             "msg.sender is not the approved miner"
         );
 
-        Txs[_txIndex] = BatchTransaction(
+        Txs[_batchIndex] = BatchTransaction(
             _batchMiner,
             new address[](0),
             _batchHash,
             txHashed,
             _batchNumConfirmationsPending,
+            _cid,
             false
         );
-
-        emit TransactionSubmitted(_txIndex, msg.sender, batchHash);
+        multiSigVerifier.submitTransaction(
+            _batchIndex,
+            _batchMiner,
+            _batchHash,
+            _txHash,
+            _batchNumConfirmationsPending,
+            _cid
+        );
+        emit TransactionSubmitted(_batchIndex, msg.sender, batchHash);
     }
 
     event TransactionSubmitted(

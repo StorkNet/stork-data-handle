@@ -1,7 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.10;
 
-contract StorkBatcher {}
+contract StorkBatcher {
+    function txBatching(uint256 _txIndex, address[] calldata validators)
+        external
+    {}
+}
 
 contract StorkStake {
     function isValidator(address _address) external view returns (bool) {}
@@ -47,6 +51,27 @@ contract MultiSigVerification {
         _;
     }
 
+    modifier txConfirmed(uint256 _txIndex) {
+        require(!isConfirmed[_txIndex][msg.sender], "tx not confirmed");
+        _;
+    }
+
+    modifier txExists(uint256 _txIndex) {
+        require(
+            batchTransactions[_txIndex].batchConfirmationsRequired > 0,
+            "tx does not exist"
+        );
+        _;
+    }
+
+    modifier txCanExecute(uint256 _txIndex) {
+        require(
+            batchTransactions[_txIndex].batchConfirmationsRequired == 0,
+            "tx already executed"
+        );
+        _;
+    }
+
     struct Tx {
         bool hasFallback;
         address txMiner;
@@ -55,12 +80,15 @@ contract MultiSigVerification {
 
     struct BatchTransaction {
         address batchMiner;
+        bytes32 batchValidatorCheck;
+        address[] batchValidator;
         // hash of batchindex, batchMiner, txHash
         bytes32 batchHash;
         // Tx array becomes keccak256(abi.encodePacked()) gets hashed keccak256(abi.encodePacked())
         bytes32 txHash;
         uint8 batchConfirmationsRequired; // 0 not create, 1 validated, >1 not fully confirmed
         bool isBatchExecuted;
+        string batchCid;
     }
 
     struct Contract {
@@ -120,11 +148,13 @@ contract MultiSigVerification {
 
     function submitTransaction(
         uint256 _batchIndex,
+        bytes32 _batchValidatorCheck,
         address _minerAddr,
         bytes32 _batchHash,
         bytes32[] calldata _txHash,
-        uint8 _batchConfirmationsRequired
-    ) public onlyValidators validatorNotConfirmed(_batchIndex) {
+        uint8 _batchConfirmationsRequired,
+        string calldata _cid
+    ) external onlyValidators validatorNotConfirmed(_batchIndex) {
         require(
             batchTransactions[_batchIndex].batchConfirmationsRequired == 0,
             "tx already exists"
@@ -135,99 +165,81 @@ contract MultiSigVerification {
         if (msg.sender == storkBatcherContract.contractAddress) {
             if (batchTransactions[_batchIndex].batchConfirmationsRequired > 0) {
                 batchTransactions[_batchIndex].batchMiner = _minerAddr;
-                isConfirmed[_batchIndex][msg.sender] = true;
                 batchTransactions[_batchIndex].batchConfirmationsRequired--;
             } else {
                 createNewTransaction(
                     _batchIndex,
+                    _batchValidatorCheck,
                     msg.sender,
                     _batchHash,
                     txHashed,
-                    _batchConfirmationsRequired
+                    _batchConfirmationsRequired,
+                    _cid
                 );
             }
         } else {
+            //check if a hash of cid, batchIndex, batchValidator, txHash is already in the batch
             if (batchTransactions[_batchIndex].batchConfirmationsRequired > 0) {
-                isConfirmed[_batchIndex][msg.sender] = true;
                 batchTransactions[_batchIndex].batchConfirmationsRequired--;
             } else {
                 createNewTransaction(
                     _batchIndex,
+                    _batchValidatorCheck,
                     address(0),
                     _batchHash,
                     txHashed,
-                    _batchConfirmationsRequired
+                    _batchConfirmationsRequired,
+                    _cid
                 );
             }
         }
-
+        batchTransactions[_batchIndex].batchValidator.push(msg.sender);
+        batchTransactions[_batchIndex].batchValidatorCheck ^= keccak256(
+            abi.encodePacked(msg.sender)
+        );
+        isConfirmed[_batchIndex][msg.sender] = true;
         emit SubmitTransaction(_batchIndex, msg.sender);
     }
 
     function createNewTransaction(
         uint256 _batchIndex,
+        bytes32 _batchValidatorCheck,
         address _minerAddr,
         bytes32 _batchHash,
         bytes32 _txHash,
-        uint8 _batchConfirmationsRequired
+        uint8 _batchConfirmationsRequired,
+        string calldata _cid
     ) internal {
         batchTransactions[_batchIndex] = BatchTransaction({
             batchMiner: _minerAddr,
+            batchValidatorCheck: _batchValidatorCheck,
+            batchValidator: new address[](0),
             batchHash: _batchHash,
             txHash: _txHash,
             batchConfirmationsRequired: _batchConfirmationsRequired,
+            batchCid: _cid,
             isBatchExecuted: false
         });
     }
 
-    // function confirmTransaction(uint256 _txIndex)
-    //     public
-    //     onlyValidator
-    //     txConfirmed(_txIndex, false)
-    //     txNotExecuted(_txIndex)
-    //     txExists(_txIndex)
-    //     validatorNotConfirmed(_txIndex)
-    // {
-    //     BatchTransaction storage transaction = batchTransactions[_txIndex];
+    function executeTransaction(uint8 _txIndex)
+        internal
+        txCanExecute(_txIndex)
+    {
+        if (batchTransactions[_txIndex].batchValidatorCheck != bytes32(0)) {
+            emit InvalidValidators(_txIndex);
+            return;
+        }
 
-    //     // keccack256 converts the input to bytes32 constant size
-    //     transaction.batchValidatorCheck ^= keccak256(
-    //         abi.encodePacked(msg.sender)
-    //     );
-    //     transaction.batchNumConfirmationsPending--;
-    //     transaction.batchValidators.push(msg.sender);
-    //     isConfirmed[_txIndex][msg.sender] = true;
+        storkBatcher.txBatching(
+            _txIndex,
+            batchTransactions[_txIndex].batchValidator
+        );
 
-    //     emit ConfirmTransaction(
-    //         _txIndex,
-    //         msg.sender,
-    //         transaction.batchNumConfirmationsPending
-    //     );
-    // }
+        batchTransactions[_txIndex].isBatchExecuted = true;
 
-    // function executeTransaction(uint8 _txIndex)
-    //     public
-    //     payable
-    //     onlyValidator
-    //     txConfirmed(_txIndex, true)
-    //     txExists(_txIndex)
-    //     txNotExecuted(_txIndex)
-    // {
-    //     BatchTransaction memory transaction = batchTransactions[_txIndex];
-
-    //     if (transaction.batchValidatorCheck != bytes32(0)) {
-    //         emit InvalidValidators(_txIndex);
-    //         return;
-    //     }
-
-    //     Tx[] memory transactions = transaction.transactions;
-
-    //     storkBatcherContract.txBatching(_txIndex, transactions);
-
-    //     batchTransactions[_txIndex].isExecuted = true;
-
-    //     emit ExecuteTransaction(_txIndex, msg.sender);
-    // }
+        emit ExecuteTransaction(_txIndex, msg.sender);
+    }
 
     // function revokeConfirmation(uint256 _txIndex)
     //     public
