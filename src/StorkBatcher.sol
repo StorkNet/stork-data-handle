@@ -90,6 +90,7 @@ contract StorkBatcher {
     function submitTransaction(
         uint256 _txIndex,
         address _batchMiner,
+        bytes32 _batchHash,
         Tx[] calldata _transactions,
         uint8 _batchNumConfirmationsPending
     ) public OnlyValidators {
@@ -102,10 +103,15 @@ contract StorkBatcher {
             abi.encodePacked(_txIndex, _batchMiner, txHashed)
         );
 
+        require(
+            _batchHash == batchHash,
+            "msg.sender is not the approved miner"
+        );
+
         Txs[_txIndex] = BatchTransaction(
             _batchMiner,
             new address[](0),
-            batchHash,
+            _batchHash,
             txHashed,
             _batchNumConfirmationsPending,
             false
