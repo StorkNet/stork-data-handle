@@ -8,10 +8,6 @@ contract StorkBatcher {
     ) external {}
 }
 
-contract StorkStake {
-    function isValidator(address _address) external view returns (bool) {}
-}
-
 contract StorkFund {
     function changeTxCost(uint256 _newCostPerTx) external {}
 }
@@ -22,9 +18,12 @@ contract StorkFund {
 /// @dev This contract is used to validate the StorkTxs
 contract MultiSigVerification {
     modifier onlyValidators() {
+        (bool succ, bytes memory val) = storkStakeAddr.staticcall(
+            abi.encodeWithSignature("isValidator(address)", msg.sender)
+        );
+
         require(
-            storkStake.isValidator(msg.sender) == true ||
-                msg.sender == storkBatcherAddr,
+            abi.decode(val, (bool)) || msg.sender == storkBatcherAddr,
             "Not a validator"
         );
         _;
@@ -106,7 +105,6 @@ contract MultiSigVerification {
     /// @notice The cost per transaction to be paid by the StorkClient
     /// @dev Reduces the amount staked by the StorkClient
     address public storkStakeAddr;
-    StorkStake public storkStake;
 
     /// @notice The cost per transaction to be paid by the StorkClient
     /// @dev Reduces the amount staked by the StorkClient
@@ -120,7 +118,6 @@ contract MultiSigVerification {
     ) {
         storkBatcher = StorkBatcher(_batchContractAddr);
         storkBatcherAddr = _batchContractAddr;
-        storkStake = StorkStake(_storkStakeAddr);
         storkStakeAddr = _storkStakeAddr;
         storkFund = StorkFund(_storkFundAddr);
         storkFundAddr = _storkFundAddr;
