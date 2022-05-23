@@ -33,7 +33,7 @@ contract StorkFund {
     /// @dev Reduces the amount staked by the StorkClient
     StorkBatcher public immutable storkBatcher;
     address public immutable storkBatcherAddr;
-
+    
     /// @notice Has the data of all StorkClients
     /// @dev Maps an address to a StorkClient struct containing the data about the address
     mapping(address => StorkClient) public storkClients;
@@ -77,12 +77,10 @@ contract StorkFund {
         require(msg.value > 0, "Funds must be greater than 0");
         require(msg.sender != address(0), "Can't be null address");
 
+
         storkClients[_storkContractAddr].funds += msg.value / 1 gwei;
         storkClients[_storkContractAddr].txLeft += msg.value / costPerTx;
-        storkBatcher.setStorkClient(
-            _storkContractAddr,
-            storkClients[_storkContractAddr].txLeft
-        );
+        storkBatcher.setStorkClient(_storkContractAddr, storkClients[_storkContractAddr].txLeft);
 
         emit ClientFunded(
             _storkContractAddr,
@@ -114,12 +112,8 @@ contract StorkFund {
         return (minFund);
     }
 
-    function txLeftStorkContract(address _storkContractAddr)
-        external
-        view
-        returns (uint256)
-    {
-        return (storkClients[_storkContractAddr].txLeft);
+    function txLeftStorkContract(address _storkContractAddr) external view returns (uint256) {
+        return(storkClients[_storkContractAddr].txLeft);
     }
 
     /// @notice Fallback function to receive funds
