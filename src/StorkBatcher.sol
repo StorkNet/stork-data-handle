@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.10;
+pragma solidity ^0.8.0;
 
 /// @title StorkNet's Stork Batching Contract
 /// @author Shankar "theblushirtdude" Subramanian
@@ -8,6 +8,7 @@ pragma solidity ^0.8.10;
 contract MultiSigVerification {
     function submitTransaction(
         uint256 _batchIndex,
+        bytes32 _validatorCheck,
         address _minerAddr,
         bytes32 _batchHash,
         bytes32[] calldata _txHash,
@@ -28,7 +29,7 @@ contract StorkBatcher {
         _;
     } /// @dev Only validated users can access the function
     modifier OnlyStorkFund() {
-        require(msg.sender == storkFundAddr, "Not the storkStakeAddr");
+        require(msg.sender == storkFundAddr, "Not the storkFundAddr");
         _;
     }
     /// @dev Only the multi sig wallet can access these functions that update batches so that we lower gas fees
@@ -37,36 +38,33 @@ contract StorkBatcher {
         _;
     }
 
-    struct Tx {
-        bool hasFallback;
-        address txMiner;
-        string cid;
-    }
-
     struct BatchTransaction {
         address batchMiner;
         // those that have confirmed
         address[] batchValidators;
+        bytes32 validatorCheck;
         // hash of batchindex, batchMiner, txHash
         bytes32 batchHash;
         // Tx array becomes keccak256(abi.encodePacked()) gets hashed keccak256(abi.encodePacked())
         bytes32 txHash;
         uint8 batchConfirmationsRequired; // 0 not create, 1 validated, >1 not fully confirmed
         string batchCid;
+        bool isBatchCreated;
         bool isBatchExecuted;
     }
 
     /// @notice The cost per transaction to be paid by the StorkClient
     /// @dev Reduces the amount staked by the StorkClient
-    MultiSigVerification public immutable multiSigVerifier;
-    address public immutable multiSigVerifierAddr;
-    /// @notice The cost per transaction to be paid by the StorkClient
-    /// @dev Reduces the amount staked by the StorkClient
-    address public immutable storkStakeAddr;
+    address public multiSigVerifierAddr;
+    MultiSigVerification public multiSigVerifier;
 
     /// @notice The cost per transaction to be paid by the StorkClient
     /// @dev Reduces the amount staked by the StorkClient
-    address public immutable storkFundAddr;
+    address public storkStakeAddr;
+
+    /// @notice The cost per transaction to be paid by the StorkClient
+    /// @dev Reduces the amount staked by the StorkClient
+    address public storkFundAddr;
 
     /// @notice Has the data of all StorkValidators
     /// @dev Maps an address to a StorkValidator struct containing the data about the address
@@ -80,34 +78,32 @@ contract StorkBatcher {
     /// @dev Maps an address to a StorkClient struct containing the data about the address
     mapping(uint256 => BatchTransaction) public Txs;
 
-    /// @notice Initializes the client
-    /// @dev Sets up the client with minimum stake, cost per tx, and the address of the multi sig verifier
-    /// @param _multiSigVerifierAddr The minumum stake required to be a StorkValidator or StorkClient
-    /// @param _storkStakeAddr The minumum stake required to be a StorkValidator or StorkClient
-    /// @param _storkFundAddr The cost per transaction to be paid by the StorkClient
-    constructor(
-        address _multiSigVerifierAddr,
-        address _storkStakeAddr,
-        address _storkFundAddr
-    ) {
-        multiSigVerifier = MultiSigVerification(_multiSigVerifierAddr);
+    function setMultiSigVerifierContract(address _multiSigVerifierAddr) public {
+        require(multiSigVerifierAddr == address(0), "msvc already set");
         multiSigVerifierAddr = _multiSigVerifierAddr;
-        storkStakeAddr = _storkStakeAddr;
-        storkFundAddr = _storkFundAddr;
+        multiSigVerifier = MultiSigVerification(_multiSigVerifierAddr);
+    }
+
+    function setStorkStakeContract(address _storkStake) public {
+        require(storkStakeAddr == address(0), "stake contract already set");
+        storkStakeAddr = _storkStake;
+    }
+
+    function setStorkFundContract(address _storkFund) public {
+        require(storkFundAddr == address(0), "fund contract already set");
+        storkFundAddr = _storkFund;
     }
 
     function submitTransaction(
         uint256 _batchIndex,
+        bytes32 _validatorCheck,
         address _batchMiner,
         bytes32 _batchHash,
         bytes32[] calldata _txHash,
         uint8 _batchNumConfirmationsPending,
         string calldata _cid
     ) public OnlyValidators {
-        require(
-            Txs[_batchIndex].batchConfirmationsRequired > 0,
-            "tx already exists"
-        );
+        require(Txs[_batchIndex].isBatchCreated == false, "tx already exists");
         bytes32 txHashed = keccak256(abi.encodePacked(_txHash));
         bytes32 batchHash = keccak256(
             abi.encodePacked(_batchIndex, _batchMiner, txHashed, _cid)
@@ -121,14 +117,17 @@ contract StorkBatcher {
         Txs[_batchIndex] = BatchTransaction(
             _batchMiner,
             new address[](0),
+            _validatorCheck,
             _batchHash,
             txHashed,
             _batchNumConfirmationsPending,
             _cid,
+            true,
             false
         );
         multiSigVerifier.submitTransaction(
             _batchIndex,
+            _validatorCheck,
             _batchMiner,
             _batchHash,
             _txHash,
@@ -138,43 +137,69 @@ contract StorkBatcher {
         emit TransactionSubmitted(_batchIndex, msg.sender, batchHash);
     }
 
-    event TransactionSubmitted(
-        uint256 indexed _txIndex,
-        address indexed _submitter,
-        bytes32 indexed _txKeccaked
-    );
-
-    /// @notice Allows an address to add themselves as a Validator if they send a transaction greater than the minStake
-    /// @dev If the Tx has enough funds to be a Validator, add them to the storkValidators mapping
-    function addStorkValidator(address _validator) external OnlyStorkStake {
-        storkValidators[_validator] = 1;
+    function txAllowExecuteBatching(
+        uint256 _txIndex,
+        address[] calldata validators
+    ) external onlyMultiSigWallet {
+        Txs[_txIndex].batchValidators = validators;
+        emit ReadyToExecute(_txIndex);
     }
 
-    /// @notice Allows an address to add themselves as a Validator if they send a transaction greater than the minStake
-    /// @dev If the Tx has enough funds to be a Validator, add them to the storkValidators mapping
-    function addStorkClient(address _contract, uint256 txs)
+    function txExecuteBatching(
+        uint256 _batchIndex,
+        address[] calldata _contracts,
+        address[] calldata _validators,
+        uint8[] calldata _contractTxCounts,
+        uint8[] calldata _validatorTxCounts,
+        bytes32[] calldata _txHash
+    ) external OnlyValidators {
+        for (uint8 i = 0; i < _txHash.length; i++) {
+            if (
+                _txHash[i] ==
+                keccak256(
+                    abi.encodePacked(
+                        _contracts[i],
+                        _validators[i],
+                        _contractTxCounts[i],
+                        _validatorTxCounts[i]
+                    )
+                )
+            ) {
+                storkClients[_contracts[i]] -= _contractTxCounts[i];
+                storkValidators[_validators[i]] += _validatorTxCounts[i];
+            }
+        }
+        Txs[_batchIndex].isBatchExecuted = true;
+    }
+
+    function setStorkValidator(address _storkValidator)
+        external
+        OnlyStorkStake
+    {
+        storkValidators[_storkValidator] = 1;
+    }
+
+    function setStorkClient(address _storkContract, uint256 txCount)
         external
         OnlyStorkFund
     {
-        storkClients[_contract] = txs;
+        storkClients[_storkContract] += txCount;
     }
 
     /// @notice Gets pending transactions for a StorkClient
     /// @param _storkClientAddr Address of the stork client that is being funded
     /// @return The number of transactions left for the Client to consume
-    function txLeftStorkClient(address _storkClientAddr)
-        external
-        view
-        returns (uint256)
-    {
-        return (storkClients[_storkClientAddr]);
-    }
 
     /// @notice Returns the minimum stake
     /// @dev Sets the new minimum stake
     /// @return minStake
-    function getMultiSigAddr() external view returns (address) {
-        return (multiSigVerifierAddr);
+
+    function getTransaction(uint256 _txIndex)
+        public
+        view
+        returns (BatchTransaction memory)
+    {
+        return (Txs[_txIndex]);
     }
 
     /// @notice Fallback function to receive funds
@@ -186,6 +211,7 @@ contract StorkBatcher {
         emit Deposit(msg.sender, msg.value);
     }
 
+    event ReadyToExecute(uint256 indexed _txIndex);
     /// @notice Event for when any ETH is deposited in the client
     /// @dev When a deposit occurs emit this event
     /// @param addr The address depositing the ETH
@@ -234,6 +260,12 @@ contract StorkBatcher {
         address indexed oldClient,
         uint256 txLeft,
         uint256 newFundTotal
+    );
+
+    event TransactionSubmitted(
+        uint256 indexed _txIndex,
+        address indexed _submitter,
+        bytes32 indexed _txKeccaked
     );
 
     /// @notice Event to tell the status of the batch update

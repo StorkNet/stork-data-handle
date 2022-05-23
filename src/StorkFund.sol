@@ -1,11 +1,14 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.10;
+pragma solidity ^0.8.0;
+
+contract StorkBatcher {
+    function setStorkClient(address _storkContract, uint256 txCount) external {}
+}
 
 contract StorkFund {
-
     /// @dev Only the multi sig wallet can access these functions that update batches so that we lower gas fees
-    modifier onlyMultiSigWallet() {
-        require(msg.sender == multiSigVerifierClient, "Not multi sig wallet");
+    modifier onlyStorkBatcher() {
+        require(msg.sender == storkBatcherAddr, "Not multi sig wallet");
         _;
     }
 
@@ -14,7 +17,7 @@ contract StorkFund {
     /// @custom: whether or not this StorkClient is active for data requests
     struct StorkClient {
         uint256 funds;
-        uint8 txLeft;
+        uint256 txLeft;
         bool isActive;
     }
 
@@ -28,7 +31,8 @@ contract StorkFund {
 
     /// @notice The cost per transaction to be paid by the StorkClient
     /// @dev Reduces the amount staked by the StorkClient
-    address public immutable multiSigVerifierClient;
+    StorkBatcher public immutable storkBatcher;
+    address public immutable storkBatcherAddr;
 
     /// @notice Has the data of all StorkClients
     /// @dev Maps an address to a StorkClient struct containing the data about the address
@@ -38,31 +42,67 @@ contract StorkFund {
     /// @dev Sets up the client with minimum stake, cost per tx, and the address of the multi sig verifier
     /// @param _minFund The minumum stake required to be a StorkValidator or StorkClient
     /// @param _costPerTx The cost per transaction to be paid by the StorkClient
-    /// @param _multiSigVerifierClient The address of the multi sig verifier
+    /// @param _storkBatcherAddr The address of the multi sig verifier
 
     constructor(
         uint256 _minFund,
         uint256 _costPerTx,
-        address _multiSigVerifierClient
+        address _storkBatcherAddr
     ) {
-        minFund = _minFund;
-        costPerTx = _costPerTx;
-        multiSigVerifierClient = _multiSigVerifierClient;
+        minFund = _minFund * 1 gwei;
+        costPerTx = _costPerTx * 1 gwei;
+        storkBatcherAddr = _storkBatcherAddr;
+        storkBatcher = StorkBatcher(_storkBatcherAddr);
     }
 
+    /// @notice Allows a Contract to add themselves as a StorkContract if they send a transaction greater than minStake
+    /// @dev Using the Funds received compute the max number of transactions that can be trasacted by the Contract
+    function addStorkContract() external payable {
+        require(msg.value > minFund, "Funds must be greater than minStake");
+        // Computes the max number of transactions that can be handled by the Contract
+        storkClients[msg.sender] = StorkClient({
+            funds: msg.value / 1 gwei,
+            txLeft: msg.value / costPerTx,
+            isActive: true
+        });
+        storkBatcher.setStorkClient(msg.sender, msg.value / costPerTx);
+
+        emit ClientCreated(msg.sender, msg.value / costPerTx);
+    }
+
+    /// @notice Any user can further fund a StorkContract
+    /// @dev Increase the number of transactions of the StorkContract based on the funding
+    /// @param _storkContractAddr Address of the stork contract that is being funded
+    function fundStorkContract(address _storkContractAddr) external payable {
+        require(msg.value > 0, "Funds must be greater than 0");
+        require(msg.sender != address(0), "Can't be null address");
+
+        storkClients[_storkContractAddr].funds += msg.value / 1 gwei;
+        storkClients[_storkContractAddr].txLeft += msg.value / costPerTx;
+        storkBatcher.setStorkClient(
+            _storkContractAddr,
+            storkClients[_storkContractAddr].txLeft
+        );
+
+        emit ClientFunded(
+            _storkContractAddr,
+            msg.value / costPerTx,
+            storkClients[_storkContractAddr].txLeft
+        );
+    }
 
     /// @notice Changes the minimum transaction cost for a StorkClient
     /// @dev Sets the new costPerTx
     /// @param _newCostPerTx The new costPerTx
-    function changeTxCost(uint256 _newCostPerTx) external onlyMultiSigWallet {
-        costPerTx = _newCostPerTx;
+    function changeTxCost(uint256 _newCostPerTx) external onlyStorkBatcher {
+        costPerTx = _newCostPerTx * 1 gwei;
         emit NewCostPerTx(_newCostPerTx);
     }
 
     /// @notice Changes the minimum stake for a StorkClient or StorkValidator
     /// @dev Sets the new minimum stake
     /// @param _newMinFund The new minimum stake
-    function changeMinFund(uint256 _newMinFund) external onlyMultiSigWallet {
+    function changeMinFund(uint256 _newMinFund) external onlyStorkBatcher {
         minFund = _newMinFund;
         emit NewMinFund(_newMinFund);
     }
@@ -72,6 +112,14 @@ contract StorkFund {
     /// @return minStake
     function getMinFundValue() external view returns (uint256) {
         return (minFund);
+    }
+
+    function txLeftStorkContract(address _storkContractAddr)
+        external
+        view
+        returns (uint256)
+    {
+        return (storkClients[_storkContractAddr].txLeft);
     }
 
     /// @notice Fallback function to receive funds

@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.10;
+pragma solidity ^0.8.0;
 
 contract StorkBatcher {
-    function txBatching(uint256 _txIndex, address[] calldata validators)
-        external
-    {}
+    function txAllowExecuteBatching(
+        uint256 _txIndex,
+        address[] calldata validators
+    ) external {}
 }
 
 contract StorkStake {
@@ -21,33 +22,32 @@ contract StorkFund {
 /// @dev This contract is used to validate the StorkTxs
 contract MultiSigVerification {
     modifier onlyValidators() {
-        require(storkStake.isValidator(msg.sender) == true, "Not a validator");
+        require(
+            storkStake.isValidator(msg.sender) == true ||
+                msg.sender == storkBatcherAddr,
+            "Not a validator"
+        );
         _;
     }
     modifier OnlyStorkStake() {
-        require(
-            msg.sender == storkStakeContract.contractAddress,
-            "Not the storkStakeAddr"
-        );
+        require(msg.sender == storkStakeAddr, "Not the storkStakeAddr");
         _;
     }
     modifier OnlyStorkFund() {
-        require(
-            msg.sender == storkFundContract.contractAddress,
-            "Not the storkStakeAddr"
-        );
+        require(msg.sender == storkFundAddr, "Not the storkStakeAddr");
         _;
     }
     modifier onlyBatcher() {
-        require(
-            msg.sender == storkBatcherContract.contractAddress,
-            "Not multi sig wallet"
-        );
+        require(msg.sender == storkBatcherAddr, "Not multi sig wallet");
         _;
     }
 
     modifier validatorNotConfirmed(uint256 _txIndex) {
-        require(!isConfirmed[_txIndex][msg.sender], "tx already confirmed");
+        require(
+            !isConfirmed[_txIndex][msg.sender] ||
+                msg.sender == storkBatcherAddr,
+            "tx already confirmed"
+        );
         _;
     }
 
@@ -72,12 +72,6 @@ contract MultiSigVerification {
         _;
     }
 
-    struct Tx {
-        bool hasFallback;
-        address txMiner;
-        string cid;
-    }
-
     struct BatchTransaction {
         address batchMiner;
         bytes32 batchValidatorCheck;
@@ -91,16 +85,9 @@ contract MultiSigVerification {
         string batchCid;
     }
 
-    struct Contract {
-        address contractAddress;
-        bool isSet;
-    }
     /// @notice List of StorkValidators
     /// @dev All approved StorkValidators are listed here
     address[] public validators;
-
-    /// @return bool if address is validator
-    mapping(address => bool) public isValidator;
 
     /// @notice Default minimum number of confirmations
     /// @dev If transaction confirmations are lower, discard transaction
@@ -113,37 +100,30 @@ contract MultiSigVerification {
 
     /// @notice The cost per transaction to be paid by the StorkClient
     /// @dev Reduces the amount staked by the StorkClient
-    Contract public storkBatcherContract;
+    address public storkBatcherAddr;
     StorkBatcher public storkBatcher;
 
     /// @notice The cost per transaction to be paid by the StorkClient
     /// @dev Reduces the amount staked by the StorkClient
-    Contract public storkStakeContract;
+    address public storkStakeAddr;
     StorkStake public storkStake;
 
     /// @notice The cost per transaction to be paid by the StorkClient
     /// @dev Reduces the amount staked by the StorkClient
-    Contract public storkFundContract;
+    address public storkFundAddr;
     StorkFund public storkFund;
 
-    constructor() {}
-
-    function setStorkBatcherContract(address payable _storkBatcher) public {
-        require(!storkBatcherContract.isSet, "client already set");
-        storkBatcherContract.contractAddress = _storkBatcher;
-        storkBatcher = StorkBatcher(_storkBatcher);
-    }
-
-    function setStorkStakeContract(address payable _storkStake) public {
-        require(!storkStakeContract.isSet, "stake contract already set");
-        storkStakeContract.contractAddress = _storkStake;
-        storkStake = StorkStake(_storkStake);
-    }
-
-    function setStorkFundContract(address payable _storkFund) public {
-        require(!storkFundContract.isSet, "fund contract already set");
-        storkFundContract.contractAddress = _storkFund;
-        storkFund = StorkFund(_storkFund);
+    constructor(
+        address _batchContractAddr,
+        address _storkStakeAddr,
+        address _storkFundAddr
+    ) {
+        storkBatcher = StorkBatcher(_batchContractAddr);
+        storkBatcherAddr = _batchContractAddr;
+        storkStake = StorkStake(_storkStakeAddr);
+        storkStakeAddr = _storkStakeAddr;
+        storkFund = StorkFund(_storkFundAddr);
+        storkFundAddr = _storkFundAddr;
     }
 
     function submitTransaction(
@@ -155,14 +135,9 @@ contract MultiSigVerification {
         uint8 _batchConfirmationsRequired,
         string calldata _cid
     ) external onlyValidators validatorNotConfirmed(_batchIndex) {
-        require(
-            batchTransactions[_batchIndex].batchConfirmationsRequired == 0,
-            "tx already exists"
-        );
-
         bytes32 txHashed = keccak256(abi.encodePacked(_txHash));
 
-        if (msg.sender == storkBatcherContract.contractAddress) {
+        if (msg.sender == storkBatcherAddr) {
             if (batchTransactions[_batchIndex].batchConfirmationsRequired > 0) {
                 batchTransactions[_batchIndex].batchMiner = _minerAddr;
                 batchTransactions[_batchIndex].batchConfirmationsRequired--;
@@ -198,6 +173,10 @@ contract MultiSigVerification {
             abi.encodePacked(msg.sender)
         );
         isConfirmed[_batchIndex][msg.sender] = true;
+        if (batchTransactions[_batchIndex].batchConfirmationsRequired == 1) {
+            batchTransactions[_batchIndex].batchConfirmationsRequired = 0;
+            executeTransaction(uint8(_batchIndex));
+        }
         emit SubmitTransaction(_batchIndex, msg.sender);
     }
 
@@ -231,7 +210,7 @@ contract MultiSigVerification {
             return;
         }
 
-        storkBatcher.txBatching(
+        storkBatcher.txAllowExecuteBatching(
             _txIndex,
             batchTransactions[_txIndex].batchValidator
         );
@@ -241,23 +220,25 @@ contract MultiSigVerification {
         emit ExecuteTransaction(_txIndex, msg.sender);
     }
 
-    // function revokeConfirmation(uint256 _txIndex)
-    //     public
-    //     onlyValidator
-    //     txExists(_txIndex)
-    //     txNotExecuted(_txIndex)
-    // {
-    //     BatchTransaction memory transaction = batchTransactions[_txIndex];
+    function revokeConfirmation(uint256 _txIndex)
+        public
+        onlyValidators
+        txExists(_txIndex)
+        txCanExecute(_txIndex)
+    {
+        BatchTransaction memory transaction = batchTransactions[_txIndex];
 
-    //     require(isConfirmed[_txIndex][msg.sender], "tx not confirmed");
+        require(isConfirmed[_txIndex][msg.sender], "tx not confirmed");
 
-    //     transaction.numConfirmations--;
-    //     transaction.validatorCheck ^= keccak256(abi.encodePacked(msg.sender));
-    //     isConfirmed[_txIndex][msg.sender] = false;
+        transaction.batchConfirmationsRequired++;
+        transaction.batchValidatorCheck ^= keccak256(
+            abi.encodePacked(msg.sender)
+        );
+        isConfirmed[_txIndex][msg.sender] = false;
 
-    //     batchTransactions[_txIndex] = transaction;
-    //     emit RevokeConfirmation(_txIndex, msg.sender);
-    // }
+        batchTransactions[_txIndex] = transaction;
+        emit RevokeConfirmation(_txIndex, msg.sender);
+    }
 
     event SubmitTransaction(uint256 indexed txIndex, address indexed validator);
     event ConfirmTransaction(

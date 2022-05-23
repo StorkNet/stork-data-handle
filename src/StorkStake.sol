@@ -1,5 +1,9 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.10;
+pragma solidity ^0.8.0;
+
+contract StorkBatcher {
+    function setStorkValidator(address _storkValidator) external {}
+}
 
 contract StorkStake {
     /// @dev Only validated users can access the function
@@ -13,7 +17,7 @@ contract StorkStake {
 
     /// @dev Only the multi sig wallet can access these functions that update batches so that we lower gas fees
     modifier onlyMultiSigWallet() {
-        require(msg.sender == multiSigVerifierClient, "Not multi sig wallet");
+        require(msg.sender == storkBatcherAddr, "Not multi sig wallet");
         _;
     }
 
@@ -38,7 +42,8 @@ contract StorkStake {
 
     /// @notice The cost per transaction to be paid by the StorkClient
     /// @dev Reduces the amount staked by the StorkClient
-    address public immutable multiSigVerifierClient;
+    StorkBatcher public immutable storkBatcher;
+    address public immutable storkBatcherAddr;
 
     /// @notice Has the data of all StorkValidators
     /// @dev Maps an address to a StorkValidator struct containing the data about the address
@@ -47,11 +52,11 @@ contract StorkStake {
     /// @notice Initializes the client
     /// @dev Sets up the client with minimum stake, cost per tx, and the address of the multi sig verifier
     /// @param _minStake The minumum stake required to be a StorkValidator or StorkClient
-    /// @param _multiSigVerifierClient The address of the multi sig verifier
-    constructor(uint256 _minStake, address _multiSigVerifierClient) {
-        minStake = _minStake;
-
-        multiSigVerifierClient = _multiSigVerifierClient;
+    /// @param _storkBatcherAddr The address of the multi sig verifier
+    constructor(uint256 _minStake, address _storkBatcherAddr) {
+        minStake = _minStake * 1 gwei;
+        storkBatcherAddr = _storkBatcherAddr;
+        storkBatcher = StorkBatcher(_storkBatcherAddr);
     }
 
     /// @notice Allows an address to add themselves as a Validator if they send a transaction greater than the minStake
@@ -66,9 +71,11 @@ contract StorkStake {
         storkValidators[msg.sender] = StorkValidator({
             stakeValue: msg.value,
             stakeEndTime: block.timestamp + stakeTime, //gets the end time of the stake
-            txCount: 0,
+            txCount: 1,
             isActive: true
         });
+
+        storkBatcher.setStorkValidator(msg.sender);
 
         emit ValidatorStaked(
             msg.sender,
