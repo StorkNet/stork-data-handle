@@ -53,7 +53,6 @@ contract StorkBatcher {
         bool isBatchExecuted;
     }
 
-
     /// @notice The cost per transaction to be paid by the StorkClient
     /// @dev Reduces the amount staked by the StorkClient
     address public multiSigVerifierAddr;
@@ -79,18 +78,18 @@ contract StorkBatcher {
     /// @dev Maps an address to a StorkClient struct containing the data about the address
     mapping(uint256 => BatchTransaction) public Txs;
 
-    function setMultiSigVerifierContract(address  _multiSigVerifierAddr) public {
+    function setMultiSigVerifierContract(address _multiSigVerifierAddr) public {
         require(multiSigVerifierAddr == address(0), "msvc already set");
         multiSigVerifierAddr = _multiSigVerifierAddr;
         multiSigVerifier = MultiSigVerification(_multiSigVerifierAddr);
     }
 
-    function setStorkStakeContract(address  _storkStake) public {
+    function setStorkStakeContract(address _storkStake) public {
         require(storkStakeAddr == address(0), "stake contract already set");
         storkStakeAddr = _storkStake;
     }
 
-    function setStorkFundContract(address  _storkFund) public {
+    function setStorkFundContract(address _storkFund) public {
         require(storkFundAddr == address(0), "fund contract already set");
         storkFundAddr = _storkFund;
     }
@@ -104,10 +103,7 @@ contract StorkBatcher {
         uint8 _batchNumConfirmationsPending,
         string calldata _cid
     ) public OnlyValidators {
-        require(
-            Txs[_batchIndex].isBatchCreated == false,
-            "tx already exists"
-        );
+        require(Txs[_batchIndex].isBatchCreated == false, "tx already exists");
         bytes32 txHashed = keccak256(abi.encodePacked(_txHash));
         bytes32 batchHash = keccak256(
             abi.encodePacked(_batchIndex, _batchMiner, txHashed, _cid)

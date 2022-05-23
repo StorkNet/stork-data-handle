@@ -2,9 +2,10 @@
 pragma solidity ^0.8.0;
 
 contract StorkBatcher {
-    function txAllowExecuteBatching(uint256 _txIndex, address[] calldata validators)
-        external
-    {}
+    function txAllowExecuteBatching(
+        uint256 _txIndex,
+        address[] calldata validators
+    ) external {}
 }
 
 contract StorkStake {
@@ -21,33 +22,32 @@ contract StorkFund {
 /// @dev This contract is used to validate the StorkTxs
 contract MultiSigVerification {
     modifier onlyValidators() {
-        require(storkStake.isValidator(msg.sender) == true || msg.sender == storkBatcherAddr, "Not a validator");
+        require(
+            storkStake.isValidator(msg.sender) == true ||
+                msg.sender == storkBatcherAddr,
+            "Not a validator"
+        );
         _;
     }
     modifier OnlyStorkStake() {
-        require(
-            msg.sender == storkStakeAddr,
-            "Not the storkStakeAddr"
-        );
+        require(msg.sender == storkStakeAddr, "Not the storkStakeAddr");
         _;
     }
     modifier OnlyStorkFund() {
-        require(
-            msg.sender == storkFundAddr,
-            "Not the storkStakeAddr"
-        );
+        require(msg.sender == storkFundAddr, "Not the storkStakeAddr");
         _;
     }
     modifier onlyBatcher() {
-        require(
-            msg.sender == storkBatcherAddr,
-            "Not multi sig wallet"
-        );
+        require(msg.sender == storkBatcherAddr, "Not multi sig wallet");
         _;
     }
 
     modifier validatorNotConfirmed(uint256 _txIndex) {
-        require(!isConfirmed[_txIndex][msg.sender] || msg.sender == storkBatcherAddr, "tx already confirmed");
+        require(
+            !isConfirmed[_txIndex][msg.sender] ||
+                msg.sender == storkBatcherAddr,
+            "tx already confirmed"
+        );
         _;
     }
 
@@ -89,7 +89,6 @@ contract MultiSigVerification {
     /// @dev All approved StorkValidators are listed here
     address[] public validators;
 
-
     /// @notice Default minimum number of confirmations
     /// @dev If transaction confirmations are lower, discard transaction
     uint256 public minNumConfirmationsRequired;
@@ -117,15 +116,15 @@ contract MultiSigVerification {
     constructor(
         address _batchContractAddr,
         address _storkStakeAddr,
-        address _storkFundAddr  
-        ) {
-            storkBatcher = StorkBatcher(_batchContractAddr);
-            storkBatcherAddr = _batchContractAddr;
-            storkStake = StorkStake(_storkStakeAddr);
-            storkStakeAddr = _storkStakeAddr;
-            storkFund = StorkFund(_storkFundAddr);
-            storkFundAddr = _storkFundAddr;
-        }
+        address _storkFundAddr
+    ) {
+        storkBatcher = StorkBatcher(_batchContractAddr);
+        storkBatcherAddr = _batchContractAddr;
+        storkStake = StorkStake(_storkStakeAddr);
+        storkStakeAddr = _storkStakeAddr;
+        storkFund = StorkFund(_storkFundAddr);
+        storkFundAddr = _storkFundAddr;
+    }
 
     function submitTransaction(
         uint256 _batchIndex,
@@ -136,8 +135,6 @@ contract MultiSigVerification {
         uint8 _batchConfirmationsRequired,
         string calldata _cid
     ) external onlyValidators validatorNotConfirmed(_batchIndex) {
-
-
         bytes32 txHashed = keccak256(abi.encodePacked(_txHash));
 
         if (msg.sender == storkBatcherAddr) {
@@ -176,7 +173,7 @@ contract MultiSigVerification {
             abi.encodePacked(msg.sender)
         );
         isConfirmed[_batchIndex][msg.sender] = true;
-        if(batchTransactions[_batchIndex].batchConfirmationsRequired == 1){
+        if (batchTransactions[_batchIndex].batchConfirmationsRequired == 1) {
             batchTransactions[_batchIndex].batchConfirmationsRequired = 0;
             executeTransaction(uint8(_batchIndex));
         }
@@ -234,7 +231,9 @@ contract MultiSigVerification {
         require(isConfirmed[_txIndex][msg.sender], "tx not confirmed");
 
         transaction.batchConfirmationsRequired++;
-        transaction.batchValidatorCheck ^= keccak256(abi.encodePacked(msg.sender));
+        transaction.batchValidatorCheck ^= keccak256(
+            abi.encodePacked(msg.sender)
+        );
         isConfirmed[_txIndex][msg.sender] = false;
 
         batchTransactions[_txIndex] = transaction;
