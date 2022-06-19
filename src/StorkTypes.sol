@@ -61,4 +61,16 @@ contract StorkTypes {
         CONDITION operation;
         string varValue;
     }
+
+    /// @notice Associates a id number with your custom Phalanx type
+    /// @dev Maps the data type name to a Phalanx type object
+    mapping(string => Phalanx) public phalanxInfo;
+
+    /// @notice Counts the number of Phalanx types
+    /// @dev Used to keep track of the number of Phalanx types
+    uint8 public storkTypeCount;
+
+    /// @notice Checks if a Phalanx type exists
+    /// @dev Used to check if a Phalanx type exists
+    mapping(string => bool) public phalanxExists;
 }
