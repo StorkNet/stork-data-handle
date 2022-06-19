@@ -16,21 +16,24 @@ contract MultiSigVerification {
 contract StorkBatcher {
     /// @dev Only validated users can access the function
     modifier OnlyValidators() {
-        require(storkValidators[msg.sender] > 0, "SB- Not a validator");
+        require(storkValidators[msg.sender] > 0, "SBR- Not a validator");
         _;
     }
     /// @dev Only validated users can access the function
     modifier OnlyStorkStake() {
-        require(msg.sender == storkStakeAddr, "SB- Not the storkStakeAddr");
+        require(msg.sender == storkStakeAddr, "SBR- Not the storkStakeAddr");
         _;
     } /// @dev Only validated users can access the function
     modifier OnlyStorkFund() {
-        require(msg.sender == storkFundAddr, "SB- Not the storkFundAddr");
+        require(msg.sender == storkFundAddr, "SBR- Not the storkFundAddr");
         _;
     }
     /// @dev Only the multi sig wallet can access these functions that update blockes so that we lower gas fees
     modifier onlyMultiSigWallet() {
-        require(msg.sender == multiSigVerifierAddr, "SB- Not multi sig wallet");
+        require(
+            msg.sender == multiSigVerifierAddr,
+            "SBR- Not multi sig wallet"
+        );
         _;
     }
 
@@ -76,18 +79,21 @@ contract StorkBatcher {
     mapping(bytes32 => bool) public txExists;
 
     function setMultiSigVerifierContract(address _multiSigVerifierAddr) public {
-        require(multiSigVerifierAddr == address(0), "SB- msvc already set");
+        require(multiSigVerifierAddr == address(0), "SBR- msvc already set");
         multiSigVerifierAddr = _multiSigVerifierAddr;
         multiSigVerifier = MultiSigVerification(_multiSigVerifierAddr);
     }
 
     function setStorkStakeContract(address _storkStake) public {
-        require(storkStakeAddr == address(0), "SB- stake contract already set");
+        require(
+            storkStakeAddr == address(0),
+            "SBR- stake contract already set"
+        );
         storkStakeAddr = _storkStake;
     }
 
     function setStorkFundContract(address _storkFund) public {
-        require(storkFundAddr == address(0), "SB- fund contract already set");
+        require(storkFundAddr == address(0), "SBR- fund contract already set");
         storkFundAddr = _storkFund;
     }
 
@@ -97,10 +103,10 @@ contract StorkBatcher {
         bytes32 _blockHash
     ) public OnlyValidators {
         bytes32 blockHash = keccak256(abi.encode(msg.sender, _blockData));
-        require(txExists[blockHash] == false, "SB- tx already exists");
+        require(txExists[blockHash] == false, "SBR- tx already exists");
         require(
             _blockHash == blockHash,
-            "SB- msg.sender is not the approved miner"
+            "SBR- msg.sender is not the approved miner"
         );
 
         txExists[blockHash] = true;
@@ -123,7 +129,7 @@ contract StorkBatcher {
     function txExecuteBatching(uint256 _blockNumber) external OnlyValidators {
         require(
             isBlockExecuted[_blockNumber] == false,
-            "SB- block has been executed"
+            "SBR- block has been executed"
         );
         Block memory executeBlock = Txs[_blockNumber];
         for (uint8 i = 0; i < executeBlock.contractsTxCounts.length; i++) {
