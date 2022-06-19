@@ -7,13 +7,13 @@ import "./StorkTypes.sol";
 /// @author Shankar "theblushirtdude" Subramanian
 /// @notice Used to connect a StorkContract to StorkNet
 /// @dev
-contract StorkQueries is StorkTypes {
+contract StorkQuery is StorkTypes {
     modifier isStorkClient() {
-        (bool succ, bytes memory val) = storkFundAddr.staticcall(
-            abi.encodeWithSignature("isStorkClient(address)", msg.sender)
-        );
+        // (bool succ, bytes memory val) = storkFundAddr.staticcall(
+        //     abi.encodeWithSignature("isStorkClient(address)", msg.sender)
+        // );
 
-        require(abi.decode(val, (bool)), "Not a validator");
+        // require(abi.decode(val, (bool)), "SQ- Not a validator");
         _;
     }
 
@@ -22,28 +22,6 @@ contract StorkQueries is StorkTypes {
     constructor(address _storkFundAddr) {
         storkFundAddr = _storkFundAddr;
     }
-
-    function createPhalanxType(
-        uint256 _storkTypeCount,
-        string memory _phalanxName,
-        bytes calldata _phalanxType
-    ) external isStorkClient {
-        emit NewPhalanxType(
-            msg.sender,
-            _storkTypeCount,
-            _phalanxName,
-            _phalanxType
-        );
-        phalanxExists[_phalanxName] = true;
-
-        storkTypeCount++;
-    }
-    event NewPhalanxType(
-        address indexed _clientAddress,
-        uint256 indexed _storkTypeCount,
-        string _phalanxName,
-        bytes _storkData
-    );
 
     /// @notice Stores new data in the StorkNet
     /// @dev Increments the phalanx's storkLastId, makes a stork with the new id and data, then emits a event
@@ -58,11 +36,13 @@ contract StorkQueries is StorkTypes {
             msg.sender,
             _phalanxName,
             _storkId,
-            Stork({
-                _id: _storkId,
-                _typeId: phalanxInfo[_phalanxName].phalanxTypeId,
-                _data: _abiEncodeData
-            })
+            abi.encode(
+                Stork({
+                    _id: _storkId,
+                    _typeId: phalanxInfo[_phalanxName].phalanxTypeId,
+                    _data: _abiEncodeData
+                })
+            )
         );
     }
 
@@ -74,7 +54,7 @@ contract StorkQueries is StorkTypes {
         address indexed _clientAddress,
         string _phalanxName,
         uint8 _storkId,
-        Stork _stork
+        bytes _stork
     );
 
     //-------------------------------------------------------------------------------------
@@ -93,11 +73,13 @@ contract StorkQueries is StorkTypes {
             msg.sender,
             _phalanxName,
             _storkId,
-            Stork({
-                _id: phalanxInfo[_phalanxName].phalanxTypeId,
-                _typeId: phalanxInfo[_phalanxName].phalanxTypeId,
-                _data: _abiEncodeData
-            })
+            abi.encode(
+                Stork({
+                    _id: phalanxInfo[_phalanxName].phalanxTypeId,
+                    _typeId: phalanxInfo[_phalanxName].phalanxTypeId,
+                    _data: _abiEncodeData
+                })
+            )
         );
     }
 
@@ -115,11 +97,13 @@ contract StorkQueries is StorkTypes {
             msg.sender,
             _phalanxName,
             _storkParam,
-            Stork({
-                _id: phalanxInfo[_phalanxName].phalanxTypeId,
-                _typeId: phalanxInfo[_phalanxName].phalanxTypeId,
-                _data: _abiEncodeData
-            })
+            abi.encode(
+                Stork({
+                    _id: phalanxInfo[_phalanxName].phalanxTypeId,
+                    _typeId: phalanxInfo[_phalanxName].phalanxTypeId,
+                    _data: _abiEncodeData
+                })
+            )
         );
     }
 
@@ -131,7 +115,7 @@ contract StorkQueries is StorkTypes {
         address indexed _clientAddress,
         string _phalanxName,
         uint32 _storkId,
-        Stork _stork
+        bytes _stork
     );
 
     /// @notice Lets StorkNet know that this contract has a new Store request
@@ -142,7 +126,7 @@ contract StorkQueries is StorkTypes {
         address indexed _clientAddress,
         string _phalanxName,
         StorkParameter[] _storkParam,
-        Stork _stork
+        bytes _stork
     );
 
     //-------------------------------------------------------------------------------------
@@ -166,7 +150,11 @@ contract StorkQueries is StorkTypes {
         string memory _phalanxName,
         StorkParameter[] memory _storkParam
     ) external isStorkClient {
-        emit EventStorkDeleteByParams(msg.sender, _phalanxName, _storkParam);
+        emit EventStorkDeleteByParams(
+            msg.sender,
+            _phalanxName,
+            abi.encode(_storkParam)
+        );
     }
 
     /// @notice Lets StorkNet know that this contract has a new Store request
@@ -184,7 +172,7 @@ contract StorkQueries is StorkTypes {
     event EventStorkDeleteByParams(
         address indexed _clientAddress,
         string _storkName,
-        StorkParameter[] _storkParam
+        bytes _storkParam
     );
 
     //-------------------------------------------------------------------------------------
@@ -221,7 +209,7 @@ contract StorkQueries is StorkTypes {
         emit EventStorkRequestByParams(
             msg.sender,
             _phalanxName,
-            _storkRequestParameters,
+            abi.encode(_storkRequestParameters),
             _fallbackFunction
         );
     }
@@ -261,7 +249,7 @@ contract StorkQueries is StorkTypes {
     event EventStorkRequestByParams(
         address indexed _clientAddress,
         string _phalanxName,
-        StorkParameter[] _storkRequestParameters,
+        bytes _storkRequestParameters,
         string _fallbackFunction
     );
 
