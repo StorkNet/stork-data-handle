@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-contract Storkblocker {
+contract StorkBlockRollup {
     function txAllowExecuteblocking(
         uint256 _txIndex,
         address[] calldata validators
@@ -101,7 +101,7 @@ contract MultiSigVerification {
     /// @notice The cost per transaction to be paid by the StorkClient
     /// @dev Reduces the amount staked by the StorkClient
     address public storkblockerAddr;
-    Storkblocker public storkblocker;
+    StorkBlockRollup public storkBlockRollup;
 
     /// @notice The cost per transaction to be paid by the StorkClient
     /// @dev Reduces the amount staked by the StorkClient
@@ -117,7 +117,7 @@ contract MultiSigVerification {
         address _storkStakeAddr,
         address _storkFundAddr
     ) {
-        storkblocker = Storkblocker(_blockContractAddr);
+        storkBlockRollup = StorkBlockRollup(_blockContractAddr);
         storkblockerAddr = _blockContractAddr;
         storkStakeAddr = _storkStakeAddr;
         storkFund = StorkFund(_storkFundAddr);
@@ -182,7 +182,7 @@ contract MultiSigVerification {
             return;
         }
 
-        storkblocker.txAllowExecuteblocking(
+        storkBlockRollup.txAllowExecuteblocking(
             _txIndex,
             blocks[_txIndex].validators
         );
