@@ -210,6 +210,24 @@ contract MultiSigVerification {
         emit RevokeConfirmation(_txIndex, msg.sender);
     }
 
+    function supplyRequestData(
+        uint256 _reqId,
+        address _addr,
+        string calldata _fallback,
+        bytes calldata _data,
+        bytes32 zkProof,
+        uint256 _key
+    ) external onlyValidators {
+        require(
+            zkProof == keccak256(abi.encode(_data, _key, msg.sender)),
+            "failed zkProof"
+        );
+        (bool success, ) = _addr.call(
+            abi.encodeWithSignature(_fallback, _data)
+        );
+        emit RequestHandled(_reqId, msg.sender, _addr, success);
+    }
+
     event SubmitTransaction(uint256 indexed txIndex, address indexed validator);
     event ConfirmTransaction(
         uint256 indexed txIndex,
@@ -224,5 +242,11 @@ contract MultiSigVerification {
     event ExecuteTransaction(
         uint256 indexed txIndex,
         address indexed validator
+    );
+    event RequestHandled(
+        uint256 indexed reqId,
+        address indexed validator,
+        address indexed client,
+        bool status
     );
 }
