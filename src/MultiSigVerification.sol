@@ -1,14 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-contract StorkBatcher {
-    function txAllowExecuteBatching(uint256 _txIndex, address[] calldata validators)
-        external
-    {}
-}
-
-contract StorkStake {
-    function isValidator(address _address) external view returns (bool) {}
+contract StorkBlockRollup {
+    function txAllowExecuteblocking(
+        uint256 _txIndex,
+        address[] calldata validators
+    ) external {}
 }
 
 contract StorkFund {
@@ -21,74 +18,76 @@ contract StorkFund {
 /// @dev This contract is used to validate the StorkTxs
 contract MultiSigVerification {
     modifier onlyValidators() {
-        require(storkStake.isValidator(msg.sender) == true || msg.sender == storkBatcherAddr, "Not a validator");
+        (bool succ, bytes memory val) = storkStakeAddr.staticcall(
+            abi.encodeWithSignature("isValidator(address)", msg.sender)
+        );
+
+        require(
+            abi.decode(val, (bool)) || msg.sender == storkblockerAddr,
+            "MSV- Not a validator"
+        );
         _;
     }
     modifier OnlyStorkStake() {
-        require(
-            msg.sender == storkStakeAddr,
-            "Not the storkStakeAddr"
-        );
+        require(msg.sender == storkStakeAddr, "MSV- Not the storkStakeAddr");
         _;
     }
     modifier OnlyStorkFund() {
-        require(
-            msg.sender == storkFundAddr,
-            "Not the storkStakeAddr"
-        );
+        require(msg.sender == storkFundAddr, "MSV- Not the storkStakeAddr");
         _;
     }
-    modifier onlyBatcher() {
-        require(
-            msg.sender == storkBatcherAddr,
-            "Not multi sig wallet"
-        );
+    modifier onlyblocker() {
+        require(msg.sender == storkblockerAddr, "MSV- Not multi sig wallet");
         _;
     }
 
     modifier validatorNotConfirmed(uint256 _txIndex) {
-        require(!isConfirmed[_txIndex][msg.sender] || msg.sender == storkBatcherAddr, "tx already confirmed");
+        require(
+            !isConfirmed[_txIndex][msg.sender] ||
+                msg.sender == storkblockerAddr,
+            "MSV- tx already confirmed"
+        );
         _;
     }
 
     modifier txConfirmed(uint256 _txIndex) {
-        require(!isConfirmed[_txIndex][msg.sender], "tx not confirmed");
+        require(!isConfirmed[_txIndex][msg.sender], "MSV- tx not confirmed");
         _;
     }
 
     modifier txExists(uint256 _txIndex) {
         require(
-            batchTransactions[_txIndex].batchConfirmationsRequired > 0,
-            "tx does not exist"
+            blocks[_txIndex].minConfirmations > 0,
+            "MSV- tx does not exist"
         );
         _;
     }
 
     modifier txCanExecute(uint256 _txIndex) {
         require(
-            batchTransactions[_txIndex].batchConfirmationsRequired == 0,
-            "tx already executed"
+            blocks[_txIndex].minConfirmations == 0,
+            "MSV- tx already executed"
         );
         _;
     }
 
-    struct BatchTransaction {
-        address batchMiner;
-        bytes32 batchValidatorCheck;
-        address[] batchValidator;
-        // hash of batchindex, batchMiner, txHash
-        bytes32 batchHash;
-        // Tx array becomes keccak256(abi.encodePacked()) gets hashed keccak256(abi.encodePacked())
-        bytes32 txHash;
-        uint8 batchConfirmationsRequired; // 0 not create, 1 validated, >1 not fully confirmed
-        bool isBatchExecuted;
-        string batchCid;
+    struct Block {
+        uint32 blockNumber;
+        bytes32 validatorProof;
+        address blockMiner;
+        bytes32[] txHash;
+        address[] contracts;
+        address[] validators;
+        uint8[] contractsTxCounts;
+        uint8[] validatorsTxCounts;
+        uint8 minConfirmations;
+        uint256 blockLockTime;
+        bool isSealed;
     }
 
     /// @notice List of StorkValidators
     /// @dev All approved StorkValidators are listed here
     address[] public validators;
-
 
     /// @notice Default minimum number of confirmations
     /// @dev If transaction confirmations are lower, discard transaction
@@ -96,18 +95,17 @@ contract MultiSigVerification {
 
     // mapping from tx index => validator => bool
     mapping(uint256 => mapping(address => bool)) public isConfirmed;
-
-    mapping(uint256 => BatchTransaction) public batchTransactions;
+    mapping(uint256 => bool) public isExecuted;
+    mapping(uint256 => Block) public blocks;
 
     /// @notice The cost per transaction to be paid by the StorkClient
     /// @dev Reduces the amount staked by the StorkClient
-    address public storkBatcherAddr;
-    StorkBatcher public storkBatcher;
+    address public storkblockerAddr;
+    StorkBlockRollup public storkBlockRollup;
 
     /// @notice The cost per transaction to be paid by the StorkClient
     /// @dev Reduces the amount staked by the StorkClient
     address public storkStakeAddr;
-    StorkStake public storkStake;
 
     /// @notice The cost per transaction to be paid by the StorkClient
     /// @dev Reduces the amount staked by the StorkClient
@@ -115,110 +113,81 @@ contract MultiSigVerification {
     StorkFund public storkFund;
 
     constructor(
-        address _batchContractAddr,
+        address _blockContractAddr,
         address _storkStakeAddr,
-        address _storkFundAddr  
-        ) {
-            storkBatcher = StorkBatcher(_batchContractAddr);
-            storkBatcherAddr = _batchContractAddr;
-            storkStake = StorkStake(_storkStakeAddr);
-            storkStakeAddr = _storkStakeAddr;
-            storkFund = StorkFund(_storkFundAddr);
-            storkFundAddr = _storkFundAddr;
-        }
+        address _storkFundAddr
+    ) {
+        storkBlockRollup = StorkBlockRollup(_blockContractAddr);
+        storkblockerAddr = _blockContractAddr;
+        storkStakeAddr = _storkStakeAddr;
+        storkFund = StorkFund(_storkFundAddr);
+        storkFundAddr = _storkFundAddr;
+    }
 
     function submitTransaction(
-        uint256 _batchIndex,
-        bytes32 _batchValidatorCheck,
-        address _minerAddr,
-        bytes32 _batchHash,
-        bytes32[] calldata _txHash,
-        uint8 _batchConfirmationsRequired,
-        string calldata _cid
-    ) external onlyValidators validatorNotConfirmed(_batchIndex) {
+        uint256 _blockNumber,
+        bytes calldata _blockData,
+        bytes32 _blockHash
+    ) external onlyValidators validatorNotConfirmed(_blockNumber) {
+        address _validator;
 
+        Block memory thisBlock = abi.decode(_blockData, (Block));
+        require(
+            keccak256(abi.encode(thisBlock.blockMiner, _blockData)) ==
+                _blockHash,
+            "MSV - hash doesn't match block content"
+        );
 
-        bytes32 txHashed = keccak256(abi.encodePacked(_txHash));
-
-        if (msg.sender == storkBatcherAddr) {
-            if (batchTransactions[_batchIndex].batchConfirmationsRequired > 0) {
-                batchTransactions[_batchIndex].batchMiner = _minerAddr;
-                batchTransactions[_batchIndex].batchConfirmationsRequired--;
+        Block memory storageBlock = blocks[_blockNumber];
+        if (msg.sender == storkblockerAddr) {
+            if (storageBlock.minConfirmations > 0) {
+                storageBlock.blockMiner = thisBlock.blockMiner;
+                storageBlock.minConfirmations--;
+                _validator = thisBlock.blockMiner;
             } else {
-                createNewTransaction(
-                    _batchIndex,
-                    _batchValidatorCheck,
-                    msg.sender,
-                    _batchHash,
-                    txHashed,
-                    _batchConfirmationsRequired,
-                    _cid
-                );
+                createNewTransaction(_blockNumber, _blockData);
             }
         } else {
-            //check if a hash of cid, batchIndex, batchValidator, txHash is already in the batch
-            if (batchTransactions[_batchIndex].batchConfirmationsRequired > 0) {
-                batchTransactions[_batchIndex].batchConfirmationsRequired--;
+            //check if a hash of blockIndex, blockValidator, txHash is already in the block
+            if (storageBlock.minConfirmations > 0) {
+                storageBlock.minConfirmations--;
+                _validator = msg.sender;
             } else {
-                createNewTransaction(
-                    _batchIndex,
-                    _batchValidatorCheck,
-                    address(0),
-                    _batchHash,
-                    txHashed,
-                    _batchConfirmationsRequired,
-                    _cid
-                );
+                createNewTransaction(_blockNumber, _blockData);
             }
         }
-        batchTransactions[_batchIndex].batchValidator.push(msg.sender);
-        batchTransactions[_batchIndex].batchValidatorCheck ^= keccak256(
-            abi.encodePacked(msg.sender)
-        );
-        isConfirmed[_batchIndex][msg.sender] = true;
-        if(batchTransactions[_batchIndex].batchConfirmationsRequired == 1){
-            batchTransactions[_batchIndex].batchConfirmationsRequired = 0;
-            executeTransaction(uint8(_batchIndex));
+        storageBlock.validatorProof ^= keccak256(abi.encodePacked(_validator));
+        blocks[_blockNumber] = storageBlock;
+        blocks[_blockNumber].validators.push(_validator);
+        isConfirmed[_blockNumber][_validator] = true;
+        if (blocks[_blockNumber].minConfirmations == 0) {
+            executeTransaction(uint8(_blockNumber));
         }
-        emit SubmitTransaction(_batchIndex, msg.sender);
+        emit SubmitTransaction(_blockNumber, _validator);
     }
 
     function createNewTransaction(
-        uint256 _batchIndex,
-        bytes32 _batchValidatorCheck,
-        address _minerAddr,
-        bytes32 _batchHash,
-        bytes32 _txHash,
-        uint8 _batchConfirmationsRequired,
-        string calldata _cid
+        uint256 _blockNumber,
+        bytes calldata _blockData
     ) internal {
-        batchTransactions[_batchIndex] = BatchTransaction({
-            batchMiner: _minerAddr,
-            batchValidatorCheck: _batchValidatorCheck,
-            batchValidator: new address[](0),
-            batchHash: _batchHash,
-            txHash: _txHash,
-            batchConfirmationsRequired: _batchConfirmationsRequired,
-            batchCid: _cid,
-            isBatchExecuted: false
-        });
+        blocks[_blockNumber] = abi.decode(_blockData, (Block));
     }
 
     function executeTransaction(uint8 _txIndex)
         internal
         txCanExecute(_txIndex)
     {
-        if (batchTransactions[_txIndex].batchValidatorCheck != bytes32(0)) {
+        if (blocks[_txIndex].validatorProof != bytes32(0)) {
             emit InvalidValidators(_txIndex);
             return;
         }
 
-        storkBatcher.txAllowExecuteBatching(
+        storkBlockRollup.txAllowExecuteblocking(
             _txIndex,
-            batchTransactions[_txIndex].batchValidator
+            blocks[_txIndex].validators
         );
 
-        batchTransactions[_txIndex].isBatchExecuted = true;
+        isExecuted[_txIndex] = true;
 
         emit ExecuteTransaction(_txIndex, msg.sender);
     }
@@ -229,16 +198,34 @@ contract MultiSigVerification {
         txExists(_txIndex)
         txCanExecute(_txIndex)
     {
-        BatchTransaction memory transaction = batchTransactions[_txIndex];
+        Block memory transaction = blocks[_txIndex];
 
-        require(isConfirmed[_txIndex][msg.sender], "tx not confirmed");
+        require(isConfirmed[_txIndex][msg.sender], "MSV- tx not confirmed");
 
-        transaction.batchConfirmationsRequired++;
-        transaction.batchValidatorCheck ^= keccak256(abi.encodePacked(msg.sender));
+        transaction.minConfirmations++;
+        transaction.validatorProof ^= keccak256(abi.encodePacked(msg.sender));
         isConfirmed[_txIndex][msg.sender] = false;
 
-        batchTransactions[_txIndex] = transaction;
+        blocks[_txIndex] = transaction;
         emit RevokeConfirmation(_txIndex, msg.sender);
+    }
+
+    function supplyRequestData(
+        uint256 _reqId,
+        address _addr,
+        string calldata _fallback,
+        bytes calldata _data,
+        bytes32 zkProof,
+        uint256 _key
+    ) external onlyValidators {
+        require(
+            zkProof == keccak256(abi.encode(_data, _key, msg.sender)),
+            "failed zkProof"
+        );
+        (bool success, ) = _addr.call(
+            abi.encodeWithSignature(_fallback, _data)
+        );
+        emit RequestHandled(_reqId, msg.sender, _addr, success);
     }
 
     event SubmitTransaction(uint256 indexed txIndex, address indexed validator);
@@ -255,5 +242,11 @@ contract MultiSigVerification {
     event ExecuteTransaction(
         uint256 indexed txIndex,
         address indexed validator
+    );
+    event RequestHandled(
+        uint256 indexed reqId,
+        address indexed validator,
+        address indexed client,
+        bool status
     );
 }

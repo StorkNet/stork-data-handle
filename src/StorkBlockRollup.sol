@@ -7,57 +7,55 @@ pragma solidity ^0.8.0;
 /// @dev This client is used to manage the on-chain data of StorkClients.
 contract MultiSigVerification {
     function submitTransaction(
-        uint256 _batchIndex,
-        bytes32 _validatorCheck,
-        address _minerAddr,
-        bytes32 _batchHash,
-        bytes32[] calldata _txHash,
-        uint8 _batchConfirmationsRequired,
-        string calldata _cid
+        uint256 _blockNumber,
+        bytes calldata _blockData,
+        bytes32 _blockHash
     ) external {}
 }
 
 contract StorkBatcher {
     /// @dev Only validated users can access the function
     modifier OnlyValidators() {
-        require(storkValidators[msg.sender] > 0, "Not a validator");
+        require(storkValidators[msg.sender] > 0, "SBR- Not a validator");
         _;
     }
     /// @dev Only validated users can access the function
     modifier OnlyStorkStake() {
-        require(msg.sender == storkStakeAddr, "Not the storkStakeAddr");
+        require(msg.sender == storkStakeAddr, "SBR- Not the storkStakeAddr");
         _;
     } /// @dev Only validated users can access the function
     modifier OnlyStorkFund() {
-        require(msg.sender == storkFundAddr, "Not the storkFundAddr");
+        require(msg.sender == storkFundAddr, "SBR- Not the storkFundAddr");
         _;
     }
-    /// @dev Only the multi sig wallet can access these functions that update batches so that we lower gas fees
+    /// @dev Only the multi sig wallet can access these functions that update blockes so that we lower gas fees
     modifier onlyMultiSigWallet() {
-        require(msg.sender == multiSigVerifierAddr, "Not multi sig wallet");
+        require(
+            msg.sender == multiSigVerifierAddr,
+            "SBR- Not multi sig wallet"
+        );
         _;
     }
 
-    struct BatchTransaction {
-        address batchMiner;
-        // those that have confirmed
-        address[] batchValidators;
-        bytes32 validatorCheck;
-        // hash of batchindex, batchMiner, txHash
-        bytes32 batchHash;
-        // Tx array becomes keccak256(abi.encodePacked()) gets hashed keccak256(abi.encodePacked())
-        bytes32 txHash;
-        uint8 batchConfirmationsRequired; // 0 not create, 1 validated, >1 not fully confirmed
-        string batchCid;
-        bool isBatchCreated;
-        bool isBatchExecuted;
+    struct Block {
+        uint32 blockNumber;
+        bytes32 validatorProof;
+        address blockMiner;
+        bytes32[] txHash;
+        address[] contracts;
+        address[] validators;
+        uint8[] contractsTxCounts;
+        uint8[] validatorsTxCounts;
+        uint8 minConfirmations;
+        uint256 blockLockTime;
+        bool isSealed;
     }
-
 
     /// @notice The cost per transaction to be paid by the StorkClient
     /// @dev Reduces the amount staked by the StorkClient
     address public multiSigVerifierAddr;
     MultiSigVerification public multiSigVerifier;
+    mapping(uint256 => bool) public isBlockExecuted;
 
     /// @notice The cost per transaction to be paid by the StorkClient
     /// @dev Reduces the amount staked by the StorkClient
@@ -77,103 +75,74 @@ contract StorkBatcher {
 
     /// @notice Has the data of all StorkClients
     /// @dev Maps an address to a StorkClient struct containing the data about the address
-    mapping(uint256 => BatchTransaction) public Txs;
+    mapping(uint256 => Block) public Txs;
+    mapping(bytes32 => bool) public txExists;
 
-    function setMultiSigVerifierContract(address  _multiSigVerifierAddr) public {
-        require(multiSigVerifierAddr == address(0), "msvc already set");
+    function setMultiSigVerifierContract(address _multiSigVerifierAddr) public {
+        require(multiSigVerifierAddr == address(0), "SBR- msvc already set");
         multiSigVerifierAddr = _multiSigVerifierAddr;
         multiSigVerifier = MultiSigVerification(_multiSigVerifierAddr);
     }
 
-    function setStorkStakeContract(address  _storkStake) public {
-        require(storkStakeAddr == address(0), "stake contract already set");
+    function setStorkStakeContract(address _storkStake) public {
+        require(
+            storkStakeAddr == address(0),
+            "SBR- stake contract already set"
+        );
         storkStakeAddr = _storkStake;
     }
 
-    function setStorkFundContract(address  _storkFund) public {
-        require(storkFundAddr == address(0), "fund contract already set");
+    function setStorkFundContract(address _storkFund) public {
+        require(storkFundAddr == address(0), "SBR- fund contract already set");
         storkFundAddr = _storkFund;
     }
 
     function submitTransaction(
-        uint256 _batchIndex,
-        bytes32 _validatorCheck,
-        address _batchMiner,
-        bytes32 _batchHash,
-        bytes32[] calldata _txHash,
-        uint8 _batchNumConfirmationsPending,
-        string calldata _cid
+        uint256 _blockNumber,
+        bytes calldata _blockData,
+        bytes32 _blockHash
     ) public OnlyValidators {
+        bytes32 blockHash = keccak256(abi.encode(msg.sender, _blockData));
+        require(txExists[blockHash] == false, "SBR- tx already exists");
         require(
-            Txs[_batchIndex].isBatchCreated == false,
-            "tx already exists"
-        );
-        bytes32 txHashed = keccak256(abi.encodePacked(_txHash));
-        bytes32 batchHash = keccak256(
-            abi.encodePacked(_batchIndex, _batchMiner, txHashed, _cid)
+            _blockHash == blockHash,
+            "SBR- msg.sender is not the approved miner"
         );
 
-        require(
-            _batchHash == batchHash,
-            "msg.sender is not the approved miner"
-        );
-
-        Txs[_batchIndex] = BatchTransaction(
-            _batchMiner,
-            new address[](0),
-            _validatorCheck,
-            _batchHash,
-            txHashed,
-            _batchNumConfirmationsPending,
-            _cid,
-            true,
-            false
-        );
+        txExists[blockHash] = true;
+        Txs[_blockNumber] = abi.decode(_blockData, (Block));
         multiSigVerifier.submitTransaction(
-            _batchIndex,
-            _validatorCheck,
-            _batchMiner,
-            _batchHash,
-            _txHash,
-            _batchNumConfirmationsPending,
-            _cid
+            _blockNumber,
+            _blockData,
+            _blockHash
         );
-        emit TransactionSubmitted(_batchIndex, msg.sender, batchHash);
+        emit TransactionSubmitted(_blockNumber, msg.sender, blockHash);
     }
 
-    function txAllowExecuteBatching(
-        uint256 _txIndex,
-        address[] calldata validators
-    ) external onlyMultiSigWallet {
-        Txs[_txIndex].batchValidators = validators;
+    function txAllowExecuteBatching(uint256 _txIndex)
+        external
+        onlyMultiSigWallet
+    {
         emit ReadyToExecute(_txIndex);
     }
 
-    function txExecuteBatching(
-        uint256 _batchIndex,
-        address[] calldata _contracts,
-        address[] calldata _validators,
-        uint8[] calldata _contractTxCounts,
-        uint8[] calldata _validatorTxCounts,
-        bytes32[] calldata _txHash
-    ) external OnlyValidators {
-        for (uint8 i = 0; i < _txHash.length; i++) {
-            if (
-                _txHash[i] ==
-                keccak256(
-                    abi.encodePacked(
-                        _contracts[i],
-                        _validators[i],
-                        _contractTxCounts[i],
-                        _validatorTxCounts[i]
-                    )
-                )
-            ) {
-                storkClients[_contracts[i]] -= _contractTxCounts[i];
-                storkValidators[_validators[i]] += _validatorTxCounts[i];
-            }
+    function txExecuteBatching(uint256 _blockNumber) external OnlyValidators {
+        require(
+            isBlockExecuted[_blockNumber] == false,
+            "SBR- block has been executed"
+        );
+        Block memory executeBlock = Txs[_blockNumber];
+        for (uint8 i = 0; i < executeBlock.contractsTxCounts.length; i++) {
+            storkClients[executeBlock.contracts[i]] -= executeBlock
+                .contractsTxCounts[i];
         }
-        Txs[_batchIndex].isBatchExecuted = true;
+
+        for (uint8 i = 0; i < executeBlock.validatorsTxCounts.length; i++) {
+            storkValidators[executeBlock.validators[i]] += executeBlock
+                .validatorsTxCounts[i];
+        }
+
+        isBlockExecuted[_blockNumber] = true;
     }
 
     function setStorkValidator(address _storkValidator)
@@ -201,7 +170,7 @@ contract StorkBatcher {
     function getTransaction(uint256 _txIndex)
         public
         view
-        returns (BatchTransaction memory)
+        returns (Block memory)
     {
         return (Txs[_txIndex]);
     }
@@ -272,15 +241,15 @@ contract StorkBatcher {
         bytes32 indexed _txKeccaked
     );
 
-    /// @notice Event to tell the status of the batch update
-    /// @dev If the batch update went smoothly or with errors, emit this event
-    /// @param txId The transaction ID of the batch update
+    /// @notice Event to tell the status of the block update
+    /// @dev If the block update went smoothly or with errors, emit this event
+    /// @param txId The transaction ID of the block update
     /// @param updateStatus Status updates of true if smooth else false
     event BatchUpdate(uint256 indexed txId, bool indexed updateStatus);
 
     /// @notice Tells if the client has run out of funds
-    /// @dev If the client does not have enough funds to handle more Txs in the current batch update, emit this event
-    /// @param txId The transaction ID of the batch update
+    /// @dev If the client does not have enough funds to handle more Txs in the current block update, emit this event
+    /// @param txId The transaction ID of the block update
     /// @param clientOnLowFund The address of the StorkClient that ran out of funds
     event ClientOutOfFund(
         uint256 indexed txId,
