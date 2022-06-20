@@ -217,13 +217,13 @@ contract MultiSigVerification {
         bytes calldata _data,
         bytes32 zkProof,
         uint256 _key
-    ) external onlyValidators {
+    ) external {
         require(
             zkProof == keccak256(abi.encode(_data, _key, msg.sender)),
-            "failed zkProof"
+            "MSVC- failed zkProof"
         );
         (bool success, ) = _addr.call(
-            abi.encodeWithSignature(_fallback, _data)
+            abi.encodeWithSignature(_fallback, _reqId, _data)
         );
         emit RequestHandled(_reqId, msg.sender, _addr, success);
     }
