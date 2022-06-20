@@ -18,6 +18,7 @@ contract StorkQuery is StorkTypes {
     }
 
     address public immutable storkFundAddr;
+    uint256 internal reqId;
 
     constructor(address _storkFundAddr) {
         storkFundAddr = _storkFundAddr;
@@ -192,7 +193,8 @@ contract StorkQuery is StorkTypes {
             msg.sender,
             _phalanxName,
             _arrayOfIds,
-            _fallbackFunction
+            _fallbackFunction,
+            reqId++
         );
     }
 
@@ -239,7 +241,8 @@ contract StorkQuery is StorkTypes {
         address indexed _clientAddress,
         string _phalanxName,
         uint32[] _arrayOfIds,
-        string _fallbackFunction
+        string _fallbackFunction,
+        uint256 _reqId
     );
 
     /// @notice Lets StorkNet know that this contract has a new Store request
