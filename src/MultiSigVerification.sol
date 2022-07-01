@@ -214,6 +214,7 @@ contract MultiSigVerification {
         uint256 _reqId,
         address _addr,
         string calldata _fallback,
+        address _fromContract,
         bytes calldata _data,
         uint8 _ids,
         bytes32 _zkProof,
@@ -224,7 +225,7 @@ contract MultiSigVerification {
             "MSVC- failed zkProof"
         );
         (bool success, ) = _addr.call(
-            abi.encodeWithSignature(_fallback, _ids, _reqId, _data)
+            abi.encodeWithSignature(_fallback, _ids, _reqId, _data, _fromContract)
         );
         emit RequestHandled(_reqId, msg.sender, _addr, success);
     }
