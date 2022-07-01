@@ -54,7 +54,7 @@ contract StorkBatcher {
     /// @notice The cost per transaction to be paid by the StorkClient
     /// @dev Reduces the amount staked by the StorkClient
     address public multiSigVerifierAddr;
-    MultiSigVerification public multiSigVerifier;
+    MultiSigVerification internal multiSigVerifier;
     mapping(uint256 => bool) public isBlockExecuted;
 
     /// @notice The cost per transaction to be paid by the StorkClient
@@ -78,13 +78,13 @@ contract StorkBatcher {
     mapping(uint256 => Block) public Txs;
     mapping(bytes32 => bool) public txExists;
 
-    function setMultiSigVerifierContract(address _multiSigVerifierAddr) public {
+    function setMultiSigVerifierContract(address _multiSigVerifierAddr) external {
         require(multiSigVerifierAddr == address(0), "SBR- msvc already set");
         multiSigVerifierAddr = _multiSigVerifierAddr;
         multiSigVerifier = MultiSigVerification(_multiSigVerifierAddr);
     }
 
-    function setStorkStakeContract(address _storkStake) public {
+    function setStorkStakeContract(address _storkStake) external {
         require(
             storkStakeAddr == address(0),
             "SBR- stake contract already set"
@@ -92,7 +92,7 @@ contract StorkBatcher {
         storkStakeAddr = _storkStake;
     }
 
-    function setStorkFundContract(address _storkFund) public {
+    function setStorkFundContract(address _storkFund) external {
         require(storkFundAddr == address(0), "SBR- fund contract already set");
         storkFundAddr = _storkFund;
     }
@@ -101,7 +101,7 @@ contract StorkBatcher {
         uint256 _blockNumber,
         bytes calldata _blockData,
         bytes32 _blockHash
-    ) public OnlyValidators {
+    ) external OnlyValidators {
         bytes32 blockHash = keccak256(abi.encode(msg.sender, _blockData));
         require(txExists[blockHash] == false, "SBR- tx already exists");
         require(
@@ -168,7 +168,7 @@ contract StorkBatcher {
     /// @return minStake
 
     function getTransaction(uint256 _txIndex)
-        public
+        external
         view
         returns (Block memory)
     {
