@@ -187,13 +187,17 @@ contract StorkQuery is StorkTypes {
     function requestStorkById(
         string memory _phalanxName,
         uint32[] memory _arrayOfIds,
-        string memory _fallbackFunction
+        string memory _fallbackFunction,
+        string calldata _destinationNetwork,
+        address _destinationContract
     ) external isStorkClient {
         emit EventStorkRequestId(
             msg.sender,
             _phalanxName,
             _arrayOfIds,
             _fallbackFunction,
+            _destinationNetwork,
+            _destinationContract,
             reqId++
         );
     }
@@ -206,13 +210,18 @@ contract StorkQuery is StorkTypes {
     function requestStorkByParams(
         string memory _phalanxName,
         StorkParameter[] memory _storkRequestParameters,
-        string memory _fallbackFunction
+        string memory _fallbackFunction,
+        string calldata _destinationNetwork,
+        address _destinationContract
     ) external isStorkClient {
         emit EventStorkRequestByParams(
             msg.sender,
             _phalanxName,
             abi.encode(_storkRequestParameters),
-            _fallbackFunction
+            _fallbackFunction,
+            _destinationNetwork,
+            _destinationContract,
+            reqId++
         );
     }
 
@@ -223,13 +232,18 @@ contract StorkQuery is StorkTypes {
     function requestStorkByRange(
         string memory _phalanxName,
         uint32[] memory _storkIdRange,
-        string memory _fallbackFunction
+        string memory _fallbackFunction,
+        string calldata _destinationNetwork,
+        address _destinationContract
     ) external isStorkClient {
         emit EventStorkRequestByRange(
             msg.sender,
             _phalanxName,
             _storkIdRange,
-            _fallbackFunction
+            _fallbackFunction,
+            _destinationNetwork,
+            _destinationContract,
+            reqId++
         );
     }
 
@@ -242,6 +256,8 @@ contract StorkQuery is StorkTypes {
         string _phalanxName,
         uint32[] _arrayOfIds,
         string _fallbackFunction,
+        string _destinationNetwork,
+        address _destinationContract,
         uint256 _reqId
     );
 
@@ -253,7 +269,10 @@ contract StorkQuery is StorkTypes {
         address indexed _clientAddress,
         string _phalanxName,
         bytes _storkRequestParameters,
-        string _fallbackFunction
+        string _fallbackFunction,
+        string _destinationNetwork,
+        address _destinationContract,
+        uint256 _reqId
     );
 
     /// @notice Lets StorkNet know that this contract has a new Store request
@@ -264,6 +283,9 @@ contract StorkQuery is StorkTypes {
         address indexed _clientAddress,
         string _phalanxName,
         uint32[] _storkIdRange,
-        string _fallbackFunction
+        string _fallbackFunction,
+        string _destinationNetwork,
+        address _destinationContract,
+        uint256 _reqId
     );
 }
